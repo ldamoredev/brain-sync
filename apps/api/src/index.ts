@@ -27,4 +27,4 @@ app.post("/ask", (req, res) => chatController.handle(req, res));
 
 app.post("/notes", async (req, res) => indexController.handle(req, res));
 
-app.listen(6060, () => console.log("🚀 Server running on http://localhost:3000"));
+app.listen(6060, () => console.log("🚀 Server running on http://localhost:6060"));

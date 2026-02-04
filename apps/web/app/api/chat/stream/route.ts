@@ -1,37 +1,29 @@
+// app/api/chat/stream/route.ts
 import type { NextRequest } from 'next/server';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
-export async function POST(req: NextRequest) {
-    const { prompt } = await req.json();
+export async function GET(req: NextRequest) {
+    const prompt = req.nextUrl.searchParams.get('prompt');
 
     if (!prompt) {
-        return new Response(
-            JSON.stringify({ error: 'prompt is required' }),
-            { status: 400 }
-        );
+        return new Response('prompt is required', { status: 400 });
     }
 
     const backendRes = await fetch('http://localhost:6060/ask', {
         method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ question: prompt }),
-
-        // 🔥 CLAVE para abortar backend cuando el cliente corta
         signal: req.signal,
     });
 
     if (!backendRes.body) {
-        return new Response('No stream from backend', { status: 502 });
+        return new Response('No backend stream', { status: 502 });
     }
 
     return new Response(backendRes.body, {
-        status: backendRes.status,
         headers: {
-            // 🔹 SSE headers (NO tocar)
             'Content-Type': 'text/event-stream; charset=utf-8',
             'Cache-Control': 'no-cache, no-transform',
             'Connection': 'keep-alive',

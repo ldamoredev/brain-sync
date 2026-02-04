@@ -1,13 +1,13 @@
 // apps/api/src/application/services/ChatService.ts
 
 import { ChatResponse } from '@brain-sync/types';
-import { DrizzleNoteRepository } from '../../infrastructure/repositories/DrizzleNoteRepository';
 import { VectorProvider } from '../providers/VectorProvider';
 import { ChatMessage, LLMProvider } from '../providers/LLMProvider';
+import { NoteRepository } from '../../domain/entities/NoteRepository';
 
 export class ChatService {
     constructor(
-        private noteRepository: DrizzleNoteRepository,
+        private noteRepository: NoteRepository,
         private vectorProvider: VectorProvider,
         private llmProvider: LLMProvider,
     ) {
@@ -64,10 +64,16 @@ export class ChatService {
         };
     }
 
-    async *askStream(question: string, onSourcesFound?: (sources: any[]) => void): AsyncIterable<string> {
+    async* askStream(question: string, onSourcesFound?: (sources: any[]) => void, options?: {
+        signal?: AbortSignal
+    }): AsyncIterable<string> {
+        const signal = options?.signal;
+
         // 1. RAG: Buscar notas relevantes
         const queryVector = await this.vectorProvider.generateEmbedding(question);
         const similarNotes = await this.noteRepository.findSimilar(queryVector, 5);
+
+        if (signal?.aborted) return;
 
         if (onSourcesFound) {
             onSourcesFound(similarNotes.map(n => ({ id: n.id, content: n.content })));
@@ -75,24 +81,26 @@ export class ChatService {
 
         // 2. Construir el contexto
         const context = similarNotes.length > 0
-            ? similarNotes.map(n => n.content).join("\n---\n")
-            : "No hay notas relacionadas en la base de datos.";
+            ? similarNotes.map(n => n.content).join('\n---\n')
+            : 'No hay notas relacionadas en la base de datos.';
 
         // 3. Preparar prompt para el LLM
         const messages: ChatMessage[] = [
             {
                 role: 'system',
-                content: `Eres un asistente personal. Responde basándote en este contexto:\n${context}`
+                content: `Eres un asistente personal. Responde basándote en este contexto:\n${context}`,
             },
-            { role: 'user', content: question }
+            { role: 'user', content: question },
         ];
 
+        if (signal?.aborted) return;
+
         // 4. Obtener el stream del proveedor (Ollama)
-        // Nota: Asegúrate de que tu llmProvider implemente generateStream
         const stream = this.llmProvider.generateStream(messages);
 
         // 5. Emitir cada fragmento
         for await (const chunk of stream) {
+            if (signal?.aborted) return;
             yield chunk;
         }
     }

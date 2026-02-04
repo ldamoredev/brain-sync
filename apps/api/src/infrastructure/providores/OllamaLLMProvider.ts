@@ -1,4 +1,3 @@
-// apps/api/src/infrastructure/providers/OllamaLLMProvider.ts
 import { ChatMessage, LLMProvider } from '../../application/providers/LLMProvider';
 import { ChatOllama } from '@langchain/ollama';
 import { AIMessage, HumanMessage, SystemMessage } from '@langchain/core/messages';

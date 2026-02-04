@@ -2,8 +2,9 @@ import { db } from '../db';
 import { notes } from "../db/schema";
 import { Note } from "../../domain/entities/Note";
 import { cosineDistance, desc, sql } from 'drizzle-orm';
+import { NoteRepository } from '../../domain/entities/NoteRepository';
 
-export class DrizzleNoteRepository {
+export class DrizzleNoteRepository implements NoteRepository {
     async save(note: Note): Promise<void> {
         await db.insert(notes).values({
             id: note.id,
@@ -12,9 +13,7 @@ export class DrizzleNoteRepository {
         });
     }
 
-    async findSimilar(queryVector: number[], limit = 3) {
-        // Calculamos la distancia entre el vector de la pregunta y los de la DB
-        // A menor distancia, mayor similitud.
+    async findSimilar(queryVector: number[], limit = 3): Promise<any> {
         const similarity = sql`1 - (${cosineDistance(notes.embedding, queryVector)})`;
 
         return db

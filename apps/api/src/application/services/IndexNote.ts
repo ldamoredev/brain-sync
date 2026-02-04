@@ -1,11 +1,11 @@
 import { Note } from "../../domain/entities/Note";
-import { DrizzleNoteRepository } from "../../infrastructure/repositories/DrizzleNoteRepository";
 import type { VectorProvider } from "../providers/VectorProvider";
 import { randomUUID } from "crypto";
+import { NoteRepository } from '../../domain/entities/NoteRepository';
 
 export class IndexNote {
     constructor(
-        private noteRepository: DrizzleNoteRepository,
+        private noteRepository: NoteRepository,
         private vectorProvider: VectorProvider
     ) {}
 

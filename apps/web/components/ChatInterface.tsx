@@ -17,23 +17,6 @@ interface Message {
     content: string;
 }
 
-const META_REGEX = new RegExp('<<META>>([\\s\\S]*?)<</META>>');
-
-function extractMeta(text: string) {
-    const match = text.match(META_REGEX);
-    if (!match) return null;
-
-    try {
-        return JSON.parse(match[1]);
-    } catch {
-        return null;
-    }
-}
-
-function stripMeta(text: string) {
-    return text.replace(META_REGEX, '').trim();
-}
-
 export default function ChatInterface() {
     const [history, setHistory] = useState<Message[]>([]);
     const [sources, setSources] = useState<any[]>([]);
@@ -48,38 +31,17 @@ export default function ChatInterface() {
         });
     }, [history]);
 
-    async function streamChat(prompt: string) {
+    function streamChat(prompt: string) {
         setIsLoading(true);
-
-        const res = await fetch('/api/chat', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ prompt }),
-        });
-
-        if (!res.body) {
-            setIsLoading(false);
-            throw new Error('No stream body');
-        }
-
-        const reader = res.body.getReader();
-        const decoder = new TextDecoder();
-
-        let buffer = '';
 
         setHistory(prev => [...prev, { role: 'assistant', content: '' }]);
 
-        while (true) {
-            const { value, done } = await reader.read();
-            if (done) break;
+        const es = new EventSource(
+            `/api/chat/stream?prompt=${encodeURIComponent(prompt)}`
+        );
 
-            buffer += decoder.decode(value, { stream: true });
-
-            const meta = extractMeta(buffer);
-            if (meta) {
-                setSources(meta.sources || meta);
-                buffer = stripMeta(buffer);
-            }
+        es.addEventListener('token', (e) => {
+            const token = JSON.parse(e.data);
 
             setHistory(prev => {
                 const last = prev[prev.length - 1];
@@ -87,15 +49,32 @@ export default function ChatInterface() {
 
                 return [
                     ...prev.slice(0, -1),
-                    { role: 'assistant', content: buffer },
+                    {
+                        role: 'assistant',
+                        content: last.content + token,
+                    },
                 ];
             });
-        }
+        });
 
-        setIsLoading(false);
+        es.addEventListener('meta', (e) => {
+            const meta = JSON.parse(e.data);
+            setSources(meta.sources ?? meta);
+        });
+
+        es.addEventListener('done', () => {
+            es.close();
+            setIsLoading(false);
+        });
+
+        es.addEventListener('error', () => {
+            es.close();
+            setIsLoading(false);
+        });
     }
 
-    const onSubmit = async (e: React.FormEvent) => {
+
+    const onSubmit = (e: React.FormEvent) => {
         e.preventDefault();
         if (!input.trim() || isLoading) return;
 
@@ -105,7 +84,7 @@ export default function ChatInterface() {
         const prompt = input;
         setInput('');
 
-        await streamChat(prompt);
+        streamChat(prompt);
     };
 
     return (
