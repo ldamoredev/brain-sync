@@ -1,4 +1,7 @@
+import 'dotenv/config';
 import express from "express";
+import helmet from "helmet";
+import rateLimit from "express-rate-limit";
 import { DrizzleNoteRepository } from "./infrastructure/repositories/DrizzleNoteRepository";
 import { ChatService } from "./application/services/ChatService";
 import { ChatController } from "./infrastructure/http/controllers/ChatController";
@@ -7,11 +10,27 @@ import { OllamaVectorProvider } from './infrastructure/providores/OllamaVectorPr
 import { NoteController } from './infrastructure/http/controllers/IndexNoteController';
 import { OllamaLLMProvider } from './infrastructure/providores/OllamaLLMProvider';
 import cors from 'cors';
+import { errorHandler } from './infrastructure/http/middleware/errorHandler';
+import { validateRequest } from './infrastructure/http/middleware/validateRequest';
+import { createNoteSchema, askQuestionSchema } from '@brain-sync/types';
+import logger from './infrastructure/logger';
 
 const app = express();
+
+// Security Middleware
+app.use(helmet());
 app.use(express.json());
+
+const limiter = rateLimit({
+	windowMs: 15 * 60 * 1000, // 15 minutes
+	max: 100, // Limit each IP to 100 requests per windowMs
+	standardHeaders: true,
+	legacyHeaders: false,
+});
+app.use(limiter);
+
 app.use(cors({
-    origin: '*', // En desarrollo, esto te quitará todos los dolores de cabeza
+    origin: process.env.CORS_ORIGIN || '*',
     methods: ['GET', 'POST', 'OPTIONS'],
 }));
 
@@ -23,8 +42,11 @@ const indexNote = new IndexNote(noteRepo, vectorProvider);
 const chatController = new ChatController(chatService);
 const indexController = new NoteController(indexNote);
 
-app.post("/ask", (req, res) => chatController.handle(req, res));
+app.post("/ask", validateRequest(askQuestionSchema), (req, res, next) => chatController.handle(req, res).catch(next));
+app.post("/notes", validateRequest(createNoteSchema), (req, res, next) => indexController.handle(req, res).catch(next));
 
-app.post("/notes", async (req, res) => indexController.handle(req, res));
+// Global Error Handler
+app.use(errorHandler);
 
-app.listen(6060, () => console.log("🚀 Server running on http://localhost:6060"));
+const port = process.env.PORT || 6060;
+app.listen(port, () => logger.info(`🚀 Server running on http://localhost:${port}`));

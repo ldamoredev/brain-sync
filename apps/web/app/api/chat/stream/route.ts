@@ -11,7 +11,9 @@ export async function GET(req: NextRequest) {
         return new Response('prompt is required', { status: 400 });
     }
 
-    const backendRes = await fetch('http://localhost:6060/ask', {
+    const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:6060';
+
+    const backendRes = await fetch(`${apiUrl}/ask`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ question: prompt }),

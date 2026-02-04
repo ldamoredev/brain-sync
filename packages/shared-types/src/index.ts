@@ -1,3 +1,5 @@
+export * from './schemas';
+
 /**
  * Entidad de Nota principal compartida entre API y Web
  */

@@ -12,11 +12,6 @@ export class ChatController {
     async handle(req: Request, res: Response) {
         const { question } = req.body;
 
-        if (!question) {
-            res.status(400).json({ error: 'question is required' });
-            return;
-        }
-
         // ─────────────────────────────────────────────
         // SSE headers
         // ─────────────────────────────────────────────

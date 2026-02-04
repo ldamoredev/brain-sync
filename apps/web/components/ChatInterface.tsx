@@ -11,6 +11,7 @@ import {
     Layers,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import ReactMarkdown from 'react-markdown';
 
 interface Message {
     role: 'user' | 'assistant';
@@ -138,9 +139,9 @@ export default function ChatInterface() {
                                     ? 'bg-zinc-800 text-zinc-100'
                                     : 'bg-zinc-900/40 border border-zinc-800/50 text-zinc-300'
                             )}>
-                                <pre className="whitespace-pre-wrap font-sans">
-                                    {msg.content}
-                                </pre>
+                                <article className="prose prose-invert">
+                                    <ReactMarkdown>{msg.content}</ReactMarkdown>
+                                </article>
 
                                 {msg.role === 'assistant' &&
                                     idx === history.length - 1 &&
@@ -167,10 +168,12 @@ export default function ChatInterface() {
                     ))}
                 </AnimatePresence>
 
-                {isLoading && (
-                    <div className="flex gap-4 opacity-60">
-                        <Sparkles className="animate-pulse" />
-                        Pensando…
+                {isLoading && history[history.length - 1]?.role === 'assistant' && history[history.length - 1]?.content === '' && (
+                    <div className="flex justify-center items-center p-4">
+                        <div className="flex items-center gap-2 text-zinc-500">
+                            <Sparkles className="animate-pulse" />
+                            <span>Pensando...</span>
+                        </div>
                     </div>
                 )}
             </div>
