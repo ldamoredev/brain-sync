@@ -1,0 +1,6 @@
+node_modules
+packages/shared-types/dist/
+packages/shared-types/node_modules
+apps/web/node_modules
+apps/web/.next
+apps/api/node_modules
