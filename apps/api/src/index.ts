@@ -14,6 +14,7 @@ import { errorHandler } from './infrastructure/http/middleware/errorHandler';
 import { validateRequest } from './infrastructure/http/middleware/validateRequest';
 import { createNoteSchema, askQuestionSchema } from '@brain-sync/types';
 import logger from './infrastructure/logger';
+import { AppError } from './domain/errors/AppError';
 
 const app = express();
 
@@ -41,6 +42,27 @@ const chatService = new ChatService(noteRepo, vectorProvider, LLMProvider);
 const indexNote = new IndexNote(noteRepo, vectorProvider);
 const chatController = new ChatController(chatService);
 const indexController = new NoteController(indexNote);
+
+app.get("/notes", async (req, res, next) => {
+    try {
+        const notes = await noteRepo.findAll();
+        res.json(notes);
+    } catch (error) {
+        next(error);
+    }
+});
+
+app.get("/notes/:id", async (req, res, next) => {
+    try {
+        const note = await noteRepo.findById(req.params.id);
+        if (!note) {
+            return next(new AppError('Note not found', 404));
+        }
+        res.json(note);
+    } catch (error) {
+        next(error);
+    }
+});
 
 app.post("/ask", validateRequest(askQuestionSchema), (req, res, next) => chatController.handle(req, res).catch(next));
 app.post("/notes", validateRequest(createNoteSchema), (req, res, next) => indexController.handle(req, res).catch(next));

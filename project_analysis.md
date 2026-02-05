@@ -18,7 +18,7 @@ The backend is the core intelligence of the system. It handles data persistence,
     *   **Application**: Use cases and service implementations.
     *   **Infrastructure**: External adapters (Database, LLM Providers, HTTP Controllers).
 *   **Database**: PostgreSQL accessed via **Drizzle ORM**.
-    *   Stores raw notes and likely their vector embeddings (using `pgvector` or similar).
+    *   Stores raw notes and their vector embeddings (using `pgvector`).
 
 #### RAG Pipeline (Retrieval-Augmented Generation)
 The RAG implementation allows the AI to "chat" with your notes.
@@ -51,7 +51,7 @@ The frontend is a modern React application built with Next.js.
 
 *   **Framework**: **Next.js 16** (App Router).
 *   **UI Library**: **React 19**.
-*   **Styling**: **Tailwind CSS v4** with `clsx` and `tailwind-merge` for dynamic class handling.
+*   **Styling**: **Tailwind CSS v4** with `clsx` and `tailwind-merge`.
 *   **Animations**: `framer-motion` for smooth message transitions.
 
 #### Chat Interface
@@ -66,7 +66,7 @@ The frontend is a modern React application built with Next.js.
     *   **Turbo**: Orchestrates tasks (build, dev, lint) across packages.
     *   **PNPM**: Efficient package manager with workspace support.
 *   **Shared Packages**:
-    *   `@brain-sync/types`: Contains shared TypeScript interfaces (e.g., `ChatResponse`, `Note`) to ensure the frontend and backend stay in sync.
+    *   `@brain-sync/types`: Contains shared TypeScript interfaces (e.g., `ChatResponse`, `Note`) and Zod schemas to ensure the frontend and backend stay in sync.
     *   `@brain-sync/typescript-config`: strict TS configurations.
 
 ## Key Features & Flows
@@ -112,3 +112,25 @@ When a user asks a question, the system performs a similarity search:
 3.  **Context Construction**:
     *   The content of these "similar notes" is concatenated to form the context.
     *   This context is passed to the LLM to ground its response in the user's data.
+
+## Project Status & Next Steps
+
+The project has reached a "feature complete" state for its initial scope. The core user journey is fully implemented, and the underlying infrastructure has been hardened for stability and scalability.
+
+### Recent Improvements
+*   **Note Management**: Full CRUD functionality for notes (Create, Read, List).
+*   **Production Hardening**:
+    *   **Environment Variables**: Replaced hardcoded values with `.env` files.
+    *   **Security**: Added `helmet`, rate limiting, and security headers.
+    *   **Error Handling**: Implemented global error handling and validation middleware.
+*   **Developer Experience**:
+    *   **Dockerization**: The entire stack (Postgres, Ollama, API, Web) is containerized with Docker Compose for one-command setup.
+    *   **Logging**: Integrated `winston` for structured backend logging.
+    *   **Testing**: Set up `vitest` and wrote initial unit tests for core services.
+
+### Future Roadmap
+While the current version is a robust MVP, several avenues exist for future development:
+*   **User Authentication**: Implement user accounts to support multiple users in a deployed environment.
+*   **Advanced Note Management**: Add features like note editing, deletion, and tagging/organization.
+*   **Scalable Vector Search**: For larger datasets, migrate from `pgvector` to a dedicated vector database like Weaviate or Pinecone.
+*   **CI/CD Pipeline**: Set up a GitHub Actions workflow to automate testing and deployment.
