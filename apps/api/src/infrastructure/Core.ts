@@ -1,4 +1,4 @@
-import { DrizzleRepositoryProvider, RConstructor } from './repositories/RepositoryProvider';
+import { DrizzleRepositoryProvider } from './repositories/RepositoryProvider';
 import { SConstructor, ServiceProvider } from '../application/services/ServiceProvider';
 import { DrizzleRoutineRepository } from './repositories/DrizzleRoutineRepository';
 import { BehaviorRepository } from '../domain/entities/BehaviorRepository';

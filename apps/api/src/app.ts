@@ -2,7 +2,6 @@ import express from 'express';
 import helmet from 'helmet';
 import rateLimit from 'express-rate-limit';
 import cors from 'cors';
-import { Controller } from './infrastructure/http/interfaces/Controller';
 import { errorHandler } from './infrastructure/http/middleware/errorHandler';
 import { Core } from './infrastructure/Core';
 import { ChatController } from './infrastructure/http/controllers/ChatController';
@@ -13,9 +12,6 @@ import { ChatService } from './application/services/ChatService';
 import { IndexNote } from './application/services/IndexNote';
 import { AgenticService } from './application/services/AgenticService';
 import { TranscriptionService } from './application/services/TranscriptionService';
-import { NoteRepository } from './domain/entities/NoteRepository';
-import { DailySummaryRepository } from './domain/entities/DailySummaryRepository';
-import { RoutineRepository } from './domain/entities/RoutineRepository';
 import { GetNotes } from './application/services/GetNotes';
 import { GetAgentData } from './application/services/GetAgentData';
 

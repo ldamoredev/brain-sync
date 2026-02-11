@@ -33,7 +33,7 @@ export class DrizzleNoteRepository extends NoteRepository {
             })
             .from(notes)
             .where(gt(similarity, threshold)) // Only return notes above the threshold
-            .orderBy(t => desc(similarity))
+            .orderBy(_ => desc(similarity))
             .limit(limit) as any;
     }
 

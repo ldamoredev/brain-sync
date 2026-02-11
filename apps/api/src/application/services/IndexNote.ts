@@ -1,9 +1,9 @@
-import { Note } from "../../domain/entities/Note";
-import type { VectorProvider } from "../providers/VectorProvider";
-import { randomUUID } from "crypto";
+import { Note } from '../../domain/entities/Note';
+import type { VectorProvider } from '../providers/VectorProvider';
+import { randomUUID } from 'crypto';
 import { NoteRepository } from '../../domain/entities/NoteRepository';
 import { JournalAnalysisService } from './JournalAnalysisService';
-import { BehaviorRepository, SavedEntity } from '../../domain/entities/BehaviorRepository';
+import { BehaviorRepository } from '../../domain/entities/BehaviorRepository';
 import { GraphRepository } from '../../domain/entities/GraphRepository';
 import { RepositoryProvider } from '../../infrastructure/repositories/RepositoryProvider';
 

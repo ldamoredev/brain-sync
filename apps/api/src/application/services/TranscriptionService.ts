@@ -1,6 +1,3 @@
-import OpenAI from 'openai';
-import fs from 'fs';
-import fsPromises from 'fs/promises';
 import { TranscriptionProvider } from '../providers/TranscriptionProvider';
 
 export class TranscriptionService {
