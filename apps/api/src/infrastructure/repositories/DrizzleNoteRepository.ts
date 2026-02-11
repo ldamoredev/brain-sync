@@ -4,7 +4,7 @@ import { Note } from "../../domain/entities/Note";
 import { eq, cosineDistance, desc, sql, gt } from 'drizzle-orm';
 import { NoteRepository } from '../../domain/entities/NoteRepository';
 
-export class DrizzleNoteRepository implements NoteRepository {
+export class DrizzleNoteRepository extends NoteRepository {
     async save(note: Note): Promise<void> {
         await db.insert(notes).values({
             id: note.id,

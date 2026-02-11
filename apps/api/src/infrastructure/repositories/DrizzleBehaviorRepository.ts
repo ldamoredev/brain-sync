@@ -2,7 +2,7 @@ import { db } from '../db';
 import { emotionsLog, triggers, behaviorOutcomes } from '../db/schema';
 import { BehaviorRepository, EmotionLog, TriggerLog, ActionLog, SavedEntity } from '../../domain/entities/BehaviorRepository';
 
-export class DrizzleBehaviorRepository implements BehaviorRepository {
+export class DrizzleBehaviorRepository extends BehaviorRepository {
     async saveEmotions(logs: EmotionLog[]): Promise<SavedEntity[]> {
         if (logs.length === 0) return [];
         const result = await db.insert(emotionsLog).values(logs).returning({ id: emotionsLog.id, emotion: emotionsLog.emotion });

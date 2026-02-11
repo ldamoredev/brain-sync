@@ -5,14 +5,13 @@ import { NoteRepository } from '../../domain/entities/NoteRepository';
 import { JournalAnalysisService } from './JournalAnalysisService';
 import { BehaviorRepository, SavedEntity } from '../../domain/entities/BehaviorRepository';
 import { GraphRepository } from '../../domain/entities/GraphRepository';
+import { RepositoryProvider } from '../../infrastructure/repositories/RepositoryProvider';
 
 export class IndexNote {
     constructor(
-        private noteRepository: NoteRepository,
+        private repositories: RepositoryProvider,
         private vectorProvider: VectorProvider,
         private analysisService: JournalAnalysisService,
-        private behaviorRepository: BehaviorRepository,
-        private graphRepository: GraphRepository
     ) {}
 
     async execute(content: string): Promise<Note> {
@@ -31,22 +30,22 @@ export class IndexNote {
         );
 
         // 2. Save Note
-        await this.noteRepository.save(note);
+        await this.repositories.get(NoteRepository).save(note);
 
         // 3. Analyze Content (Behavioral Intelligence)
         try {
             const analysis = await this.analysisService.analyze(content);
 
             // Save Entities and capture their IDs
-            const savedEmotions = await this.behaviorRepository.saveEmotions(
+            const savedEmotions = await this.repositories.get(BehaviorRepository).saveEmotions(
                 analysis.emotions.map(e => ({ noteId: note.id, emotion: e.name, intensity: e.intensity }))
             );
 
-            const savedTriggers = await this.behaviorRepository.saveTriggers(
+            const savedTriggers = await this.repositories.get(BehaviorRepository).saveTriggers(
                 analysis.triggers.map(t => ({ noteId: note.id, description: t.description, category: t.category }))
             );
 
-            const savedActions = await this.behaviorRepository.saveActions(
+            const savedActions = await this.repositories.get(BehaviorRepository).saveActions(
                 analysis.actions.map(a => ({ noteId: note.id, action: a.description, outcomeType: a.type }))
             );
 
@@ -64,7 +63,7 @@ export class IndexNote {
                 const targetId = entityMap.get(rel.target.toLowerCase());
 
                 if (sourceId && targetId) {
-                    await this.graphRepository.createRelationship({
+                    await this.repositories.get(GraphRepository).createRelationship({
                         sourceId,
                         targetId,
                         type: rel.type,

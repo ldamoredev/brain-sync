@@ -1,8 +1,7 @@
 import { Request, Response, Router } from 'express';
 import { Controller } from '../interfaces/Controller';
 import { AgenticService } from '../../../application/services/AgenticService';
-import { DrizzleDailySummaryRepository } from '../../repositories/DrizzleDailySummaryRepository';
-import { DrizzleRoutineRepository } from '../../repositories/DrizzleRoutineRepository';
+import { GetAgentData } from '../../../application/services/GetAgentData';
 
 export class AgentController implements Controller {
     public path = '/agents';
@@ -10,8 +9,7 @@ export class AgentController implements Controller {
 
     constructor(
         private agenticService: AgenticService,
-        private dailySummaryRepo: DrizzleDailySummaryRepository,
-        private routineRepo: DrizzleRoutineRepository
+        private getAgentDataService: GetAgentData
     ) {
         this.initializeRoutes();
     }
@@ -36,7 +34,7 @@ export class AgentController implements Controller {
 
     async getAudit(req: Request, res: Response, next: any) {
         try {
-            const summary = await this.dailySummaryRepo.findByDate(req.params.date as any);
+            const summary = await this.getAgentDataService.getAudit(req.params.date as any);
             if (!summary) {
                 return res.status(404).json({ message: "No audit found for this date" });
             }
@@ -58,7 +56,7 @@ export class AgentController implements Controller {
 
     async getRoutine(req: Request, res: Response, next: any) {
         try {
-            const routine = await this.routineRepo.findByDate(req.params.date as any);
+            const routine = await this.getAgentDataService.getRoutine(req.params.date as any);
             if (!routine) {
                 return res.status(404).json({ message: "No routine found for this date" });
             }
@@ -74,7 +72,7 @@ export class AgentController implements Controller {
             if (!activities || !Array.isArray(activities)) {
                 return res.status(400).json({ message: "Invalid activities format" });
             }
-            await this.routineRepo.update(req.params.date as any, activities);
+            await this.getAgentDataService.updateRoutine(req.params.date as any, activities);
             res.json({ message: "Routine updated successfully" });
         } catch (error) {
             next(error);

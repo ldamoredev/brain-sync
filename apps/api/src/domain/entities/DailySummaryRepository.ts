@@ -7,7 +7,7 @@ export interface DailySummary {
     createdAt: Date;
 }
 
-export interface DailySummaryRepository {
-    save(summary: Omit<DailySummary, 'id' | 'createdAt'>): Promise<void>;
-    findByDate(date: string): Promise<DailySummary | null>;
+export abstract class DailySummaryRepository {
+    abstract save(summary: Omit<DailySummary, 'id' | 'createdAt'>): Promise<void>;
+    abstract findByDate(date: string): Promise<DailySummary | null>;
 }

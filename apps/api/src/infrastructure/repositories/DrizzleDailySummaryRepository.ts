@@ -3,7 +3,7 @@ import { dailySummaries } from '../db/schema';
 import { DailySummaryRepository, DailySummary } from '../../domain/entities/DailySummaryRepository';
 import { eq } from 'drizzle-orm';
 
-export class DrizzleDailySummaryRepository implements DailySummaryRepository {
+export class DrizzleDailySummaryRepository extends DailySummaryRepository {
     async save(summary: Omit<DailySummary, 'id' | 'createdAt'>): Promise<void> {
         await db.insert(dailySummaries).values({
             date: summary.date,

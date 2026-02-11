@@ -2,13 +2,12 @@ import { LLMProvider, ChatMessage } from '../providers/LLMProvider';
 import { DailySummaryRepository } from '../../domain/entities/DailySummaryRepository';
 import { RoutineRepository } from '../../domain/entities/RoutineRepository';
 import { NoteRepository } from '../../domain/entities/NoteRepository';
+import { RepositoryProvider } from '../../infrastructure/repositories/RepositoryProvider';
 
 export class AgenticService {
     constructor(
         private llmProvider: LLMProvider,
-        private dailySummaryRepo: DailySummaryRepository,
-        private routineRepo: RoutineRepository,
-        private noteRepo: NoteRepository
+        private repositories: RepositoryProvider,
     ) {}
 
     async generateDailyAudit(date: string): Promise<void> {
@@ -16,7 +15,7 @@ export class AgenticService {
         // Note: This assumes we have a method to fetch by date range, which we might need to add to NoteRepository
         // For now, let's assume we can fetch recent notes or implement a specific query later.
         // As a placeholder, we'll fetch all notes and filter in memory (inefficient but works for MVP)
-        const allNotes = await this.noteRepo.findAll();
+        const allNotes = await this.repositories.get(NoteRepository).findAll();
         const dayNotes = allNotes.filter(n => {
             const noteDate = new Date(n.createdAt).toISOString().split('T')[0];
             return noteDate === date;
@@ -48,7 +47,7 @@ export class AgenticService {
         
         try {
             const parsed = JSON.parse(this.cleanJson(response));
-            await this.dailySummaryRepo.save({
+            await this.repositories.get(DailySummaryRepository).save({
                 date,
                 summary: parsed.summary || "Resumen no disponible",
                 riskLevel: parsed.riskLevel || 1,
@@ -62,7 +61,7 @@ export class AgenticService {
     async generateRoutine(date: string): Promise<void> {
         // Fetch previous day's summary to inform the routine
         const yesterday = new Date(new Date(date).setDate(new Date(date).getDate() - 1)).toISOString().split('T')[0] as any;
-        const summary = await this.dailySummaryRepo.findByDate(yesterday);
+        const summary = await this.repositories.get(DailySummaryRepository).findByDate(yesterday);
 
         const context = summary 
             ? `Resumen de ayer (Riesgo: ${summary.riskLevel}): ${summary.summary}`
@@ -121,7 +120,7 @@ export class AgenticService {
                 extractActivities(parsed);
             }
 
-            await this.routineRepo.save({
+            await this.repositories.get(RoutineRepository).save({
                 targetDate: date,
                 activities: activities
             });

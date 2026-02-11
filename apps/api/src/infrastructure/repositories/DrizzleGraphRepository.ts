@@ -3,7 +3,7 @@ import { relationships, emotionsLog, triggers, behaviorOutcomes } from '../db/sc
 import { GraphRepository, Relationship, GraphContext } from '../../domain/entities/GraphRepository';
 import { eq, and, inArray, sql } from 'drizzle-orm';
 
-export class DrizzleGraphRepository implements GraphRepository {
+export class DrizzleGraphRepository extends GraphRepository {
     async createRelationship(rel: Relationship): Promise<void> {
         await db.insert(relationships).values({
             sourceId: rel.sourceId,

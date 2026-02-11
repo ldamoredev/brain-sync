@@ -12,8 +12,8 @@ export interface Routine {
     createdAt: Date;
 }
 
-export interface RoutineRepository {
-    save(routine: Omit<Routine, 'id' | 'createdAt'>): Promise<void>;
-    update(date: string, activities: RoutineActivity[]): Promise<void>;
-    findByDate(date: string): Promise<Routine | null>;
+export abstract class RoutineRepository {
+    abstract save(routine: Omit<Routine, 'id' | 'createdAt'>): Promise<void>;
+    abstract update(date: string, activities: RoutineActivity[]): Promise<void>;
+    abstract findByDate(date: string): Promise<Routine | null>;
 }

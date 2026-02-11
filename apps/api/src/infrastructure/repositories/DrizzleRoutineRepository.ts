@@ -3,7 +3,7 @@ import { routines } from '../db/schema';
 import { RoutineRepository, Routine, RoutineActivity } from '../../domain/entities/RoutineRepository';
 import { eq } from 'drizzle-orm';
 
-export class DrizzleRoutineRepository implements RoutineRepository {
+export class DrizzleRoutineRepository extends RoutineRepository {
     async save(routine: Omit<Routine, 'id' | 'createdAt'>): Promise<void> {
         await db.insert(routines).values({
             targetDate: routine.targetDate,

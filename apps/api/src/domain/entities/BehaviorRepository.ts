@@ -22,8 +22,8 @@ export interface SavedEntity {
     type: 'EMOTION' | 'TRIGGER' | 'ACTION';
 }
 
-export interface BehaviorRepository {
-    saveEmotions(logs: EmotionLog[]): Promise<SavedEntity[]>;
-    saveTriggers(logs: TriggerLog[]): Promise<SavedEntity[]>;
-    saveActions(logs: ActionLog[]): Promise<SavedEntity[]>;
+export abstract class BehaviorRepository {
+    abstract saveEmotions(logs: EmotionLog[]): Promise<SavedEntity[]>;
+    abstract saveTriggers(logs: TriggerLog[]): Promise<SavedEntity[]>;
+    abstract saveActions(logs: ActionLog[]): Promise<SavedEntity[]>;
 }

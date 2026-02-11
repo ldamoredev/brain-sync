@@ -5,13 +5,13 @@ import { VectorProvider } from '../providers/VectorProvider';
 import { ChatMessage, LLMProvider } from '../providers/LLMProvider';
 import { NoteRepository } from '../../domain/entities/NoteRepository';
 import { GraphRepository } from '../../domain/entities/GraphRepository';
+import { RepositoryProvider } from '../../infrastructure/repositories/RepositoryProvider';
 
 export class ChatService {
     constructor(
-        private noteRepository: NoteRepository,
+        private repositories: RepositoryProvider,
         private vectorProvider: VectorProvider,
         private llmProvider: LLMProvider,
-        private graphRepository: GraphRepository
     ) {
     }
 
@@ -24,7 +24,7 @@ export class ChatService {
 
         // 2. Recuperar notas relevantes de la DB (Búsqueda Vectorial)
         // Usamos un umbral de 0.5 para filtrar ruido
-        const similarNotes = await this.noteRepository.findSimilar(queryVector, 5, 0.5);
+        const similarNotes = await this.repositories.get(NoteRepository).findSimilar(queryVector, 5, 0.5);
 
         // 3. Si no hay notas, respondemos preventivamente
         if (similarNotes.length === 0) {
@@ -36,7 +36,7 @@ export class ChatService {
 
         // 4. GraphRAG: Find contextual relationships
         const noteIds = similarNotes.map(n => n.id);
-        const graphContext = await this.graphRepository.findContextualRelationships(noteIds);
+        const graphContext = await this.repositories.get(GraphRepository).findContextualRelationships(noteIds);
         
         const graphContextString = graphContext.length > 0
             ? `\n\nRELACIONES ENCONTRADAS (GraphRAG):\n${graphContext.map(r => `- ${r.source} ${r.type} ${r.target}`).join('\n')}`
@@ -88,7 +88,7 @@ export class ChatService {
         // 1. RAG: Buscar notas relevantes
         const queryVector = await this.vectorProvider.generateEmbedding(question);
         // Usamos un umbral de 0.5 para filtrar ruido
-        const similarNotes = await this.noteRepository.findSimilar(queryVector, 5, 0.5);
+        const similarNotes = await this.repositories.get(NoteRepository).findSimilar(queryVector, 5, 0.5);
 
         if (signal?.aborted) return;
 
@@ -98,7 +98,7 @@ export class ChatService {
 
         // 2. GraphRAG: Find contextual relationships
         const noteIds = similarNotes.map(n => n.id);
-        const graphContext = await this.graphRepository.findContextualRelationships(noteIds);
+        const graphContext = await this.repositories.get(GraphRepository).findContextualRelationships(noteIds);
         
         const graphContextString = graphContext.length > 0
             ? `\n\nRELACIONES ENCONTRADAS (GraphRAG):\n${graphContext.map(r => `- ${r.source} ${r.type} ${r.target}`).join('\n')}`

@@ -1,9 +1,9 @@
 import { Request, Response, Router } from "express";
 import { IndexNote } from "../../../application/services/IndexNote";
+import { GetNotes } from "../../../application/services/GetNotes";
 import { Controller } from "../interfaces/Controller";
 import { validateRequest } from "../middleware/validateRequest";
 import { createNoteSchema } from "@brain-sync/types";
-import { DrizzleNoteRepository } from "../../repositories/DrizzleNoteRepository";
 import { AppError } from "../../../domain/errors/AppError";
 
 export class NoteController implements Controller {
@@ -12,7 +12,7 @@ export class NoteController implements Controller {
 
     constructor(
         private indexNoteUseCase: IndexNote,
-        private noteRepository: DrizzleNoteRepository
+        private getNotesUseCase: GetNotes
     ) {
         this.initializeRoutes();
     }
@@ -33,12 +33,12 @@ export class NoteController implements Controller {
     }
 
     async getAll(req: Request, res: Response) {
-        const notes = await this.noteRepository.findAll();
+        const notes = await this.getNotesUseCase.getAll();
         res.json(notes);
     }
 
     async getById(req: Request, res: Response, next: any) {
-        const note = await this.noteRepository.findById(req.params.id as any);
+        const note = await this.getNotesUseCase.getById(req.params.id as any);
         if (!note) {
             return next(new AppError('Note not found', 404));
         }

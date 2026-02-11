@@ -11,8 +11,8 @@ export interface GraphContext {
     type: string;
 }
 
-export interface GraphRepository {
-    createRelationship(rel: Relationship): Promise<void>;
-    findRelated(nodeId: string, type?: string): Promise<Relationship[]>;
-    findContextualRelationships(noteIds: string[]): Promise<GraphContext[]>;
+export abstract class GraphRepository {
+    abstract createRelationship(rel: Relationship): Promise<void>;
+    abstract findRelated(nodeId: string, type?: string): Promise<Relationship[]>;
+    abstract findContextualRelationships(noteIds: string[]): Promise<GraphContext[]>;
 }
