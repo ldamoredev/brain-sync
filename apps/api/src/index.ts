@@ -1,74 +1,53 @@
 import 'dotenv/config';
-import express from "express";
-import helmet from "helmet";
-import rateLimit from "express-rate-limit";
-import { DrizzleNoteRepository } from "./infrastructure/repositories/DrizzleNoteRepository";
-import { ChatService } from "./application/services/ChatService";
-import { ChatController } from "./infrastructure/http/controllers/ChatController";
+import { App } from './app';
+import { DrizzleNoteRepository } from './infrastructure/repositories/DrizzleNoteRepository';
+import { ChatService } from './application/services/ChatService';
+import { ChatController } from './infrastructure/http/controllers/ChatController';
 import { IndexNote } from './application/services/IndexNote';
 import { OllamaVectorProvider } from './infrastructure/providores/OllamaVectorProvider';
-import { NoteController } from './infrastructure/http/controllers/IndexNoteController';
+import { NoteController } from './infrastructure/http/controllers/NoteController';
 import { OllamaLLMProvider } from './infrastructure/providores/OllamaLLMProvider';
-import cors from 'cors';
-import { errorHandler } from './infrastructure/http/middleware/errorHandler';
-import { validateRequest } from './infrastructure/http/middleware/validateRequest';
-import { createNoteSchema, askQuestionSchema } from '@brain-sync/types';
-import logger from './infrastructure/logger';
-import { AppError } from './domain/errors/AppError';
+import { JournalAnalysisService } from './application/services/JournalAnalysisService';
+import { DrizzleBehaviorRepository } from './infrastructure/repositories/DrizzleBehaviorRepository';
+import { AgenticService } from './application/services/AgenticService';
+import { DrizzleDailySummaryRepository } from './infrastructure/repositories/DrizzleDailySummaryRepository';
+import { DrizzleRoutineRepository } from './infrastructure/repositories/DrizzleRoutineRepository';
+import { DrizzleGraphRepository } from './infrastructure/repositories/DrizzleGraphRepository';
+import { TranscriptionService } from './application/services/TranscriptionService';
+import { TranscriptionController } from './infrastructure/http/controllers/TranscriptionController';
+import { AgentController } from './infrastructure/http/controllers/AgentController';
 
-const app = express();
-
-// Security Middleware
-app.use(helmet());
-app.use(express.json());
-
-const limiter = rateLimit({
-	windowMs: 15 * 60 * 1000, // 15 minutes
-	max: 100, // Limit each IP to 100 requests per windowMs
-	standardHeaders: true,
-	legacyHeaders: false,
-});
-app.use(limiter);
-
-app.use(cors({
-    origin: process.env.CORS_ORIGIN || '*',
-    methods: ['GET', 'POST', 'OPTIONS'],
-}));
-
+// Repositories
 const noteRepo = new DrizzleNoteRepository();
+const behaviorRepo = new DrizzleBehaviorRepository();
+const dailySummaryRepo = new DrizzleDailySummaryRepository();
+const routineRepo = new DrizzleRoutineRepository();
+const graphRepo = new DrizzleGraphRepository();
+
+// Providers
 const vectorProvider = new OllamaVectorProvider();
 const LLMProvider = new OllamaLLMProvider();
-const chatService = new ChatService(noteRepo, vectorProvider, LLMProvider);
-const indexNote = new IndexNote(noteRepo, vectorProvider);
+
+// Services
+const journalAnalysisService = new JournalAnalysisService(LLMProvider);
+const chatService = new ChatService(noteRepo, vectorProvider, LLMProvider, graphRepo);
+const indexNote = new IndexNote(noteRepo, vectorProvider, journalAnalysisService, behaviorRepo, graphRepo);
+const agenticService = new AgenticService(LLMProvider, dailySummaryRepo, routineRepo, noteRepo);
+const transcriptionService = new TranscriptionService();
+
+// Controllers
 const chatController = new ChatController(chatService);
-const indexController = new NoteController(indexNote);
+const noteController = new NoteController(indexNote, noteRepo);
+const transcriptionController = new TranscriptionController(transcriptionService);
+const agentController = new AgentController(agenticService, dailySummaryRepo, routineRepo);
 
-app.get("/notes", async (req, res, next) => {
-    try {
-        const notes = await noteRepo.findAll();
-        res.json(notes);
-    } catch (error) {
-        next(error);
-    }
-});
+// Initialize App
+const app = new App([
+    chatController,
+    noteController,
+    transcriptionController,
+    agentController,
+]);
 
-app.get("/notes/:id", async (req, res, next) => {
-    try {
-        const note = await noteRepo.findById(req.params.id);
-        if (!note) {
-            return next(new AppError('Note not found', 404));
-        }
-        res.json(note);
-    } catch (error) {
-        next(error);
-    }
-});
 
-app.post("/ask", validateRequest(askQuestionSchema), (req, res, next) => chatController.handle(req, res).catch(next));
-app.post("/notes", validateRequest(createNoteSchema), (req, res, next) => indexController.handle(req, res).catch(next));
-
-// Global Error Handler
-app.use(errorHandler);
-
-const port = process.env.PORT || 6060;
-app.listen(port, () => logger.info(`🚀 Server running on http://localhost:${port}`));
+app.listen();

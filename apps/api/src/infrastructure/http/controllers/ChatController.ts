@@ -1,13 +1,25 @@
-import type { Request, Response } from 'express';
+import { Request, Response, Router } from 'express';
 import { ChatService } from '../../../application/services/ChatService';
+import { Controller } from '../interfaces/Controller';
+import { validateRequest } from '../middleware/validateRequest';
+import { askQuestionSchema } from '@brain-sync/types';
 
 type StreamError =
     | { code: 'ABORTED' }
     | { code: 'RAG_ERROR'; message?: string }
     | { code: 'LLM_ERROR'; message?: string };
 
-export class ChatController {
-    constructor(private chatService: ChatService) {}
+export class ChatController implements Controller {
+    public path = '/ask';
+    public router = Router() as any;
+
+    constructor(private chatService: ChatService) {
+        this.initializeRoutes();
+    }
+
+    private initializeRoutes() {
+        this.router.post(`${this.path}`, validateRequest(askQuestionSchema), this.handle.bind(this));
+    }
 
     async handle(req: Request, res: Response) {
         const { question } = req.body;

@@ -22,7 +22,7 @@ export const errorHandler = (
         return res.status(400).json({
             status: 'fail',
             message: 'Validation Error',
-            errors: err.errors,
+            errors: err.issues,
         });
     }
 

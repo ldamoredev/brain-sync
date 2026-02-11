@@ -3,7 +3,11 @@
   "extends": "@brain-sync/typescript-config/node.json",
   "compilerOptions": {
     "rootDir": "./src",
-    "outDir": "./dist"
+    "outDir": "./dist",
+    "noImplicitAny": false,
+    "strict": false,
+    "exactOptionalPropertyTypes": false,
+    "strictNullChecks": false
   },
   "include": ["src"]
 }

@@ -5,3 +5,4 @@ apps/web/node_modules
 apps/web/.next
 apps/api/node_modules
 .turbo
+whisper-cache

@@ -2,13 +2,15 @@
 
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { Brain, FileText, PlusCircle, Settings, LogOut } from 'lucide-react';
+import { Brain, FileText, PlusCircle, Settings, LogOut, Activity } from 'lucide-react';
 import NoteCreator from './NoteCreator';
 import NoteViewer from './NoteViewer';
+import AgenticDashboard from './AgenticDashboard';
 import { Note } from '@brain-sync/types';
 
 export default function Sidebar() {
   const [isCreatorOpen, setIsCreatorOpen] = useState(false);
+  const [isDashboardOpen, setIsDashboardOpen] = useState(false);
   const [notes, setNotes] = useState<Note[]>([]);
   const [selectedNote, setSelectedNote] = useState<Note | null>(null);
 
@@ -67,6 +69,14 @@ export default function Sidebar() {
 
         <div className="mt-auto space-y-2 border-t border-zinc-800 pt-4">
           <button
+            onClick={() => setIsDashboardOpen(true)}
+            className="w-full flex items-center gap-3 px-4 py-3 rounded-lg text-zinc-200 hover:bg-zinc-700 transition-colors duration-200 group"
+          >
+            <Activity size={20} className="text-purple-400 group-hover:text-white" />
+            <span className="font-medium">Recovery Dashboard</span>
+          </button>
+          
+          <button
             onClick={() => setIsCreatorOpen(true)}
             className="w-full flex items-center gap-3 px-4 py-3 rounded-lg text-zinc-200 hover:bg-zinc-700 transition-colors duration-200 group"
           >
@@ -85,6 +95,7 @@ export default function Sidebar() {
       </aside>
       <NoteCreator isOpen={isCreatorOpen} onClose={() => setIsCreatorOpen(false)} onNoteCreated={handleNoteCreated} />
       <NoteViewer note={selectedNote} onClose={() => setSelectedNote(null)} />
+      <AgenticDashboard isOpen={isDashboardOpen} onClose={() => setIsDashboardOpen(false)} />
     </>
   );
 }

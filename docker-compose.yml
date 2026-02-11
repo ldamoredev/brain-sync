@@ -1,51 +1,17 @@
 services:
-  # Base de datos con soporte para vectores
   postgres:
     image: ankane/pgvector:latest
     ports:
       - "5432:5432"
-    environment:
-      POSTGRES_DB: brain_sync
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: password
     volumes:
       - pgdata:/var/lib/postgresql/data
 
-  # Motor de IA local
-  ollama:
-    image: ollama/ollama:latest
+  whisper-api:
+    image: fedirz/faster-whisper-server:latest-cpu
     ports:
-      - "11434:11434"
-    volumes:
-      - ollama_storage:/root/.ollama
-
-  # Backend API
-  api:
-    build:
-      context: .
-      dockerfile: apps/api/Dockerfile
-    ports:
-      - "6060:6060"
-    depends_on:
-      - postgres
-      - ollama
+      - "8000:8000"
     environment:
-      - DATABASE_URL=postgres://postgres:password@postgres:5432/brain_sync
-      - OLLAMA_BASE_URL=http://ollama:11434
-      - PORT=6060
-      - CORS_ORIGIN=http://localhost:3000
-
-  # Frontend Web App
-  web:
-    build:
-      context: .
-      dockerfile: apps/web/Dockerfile
-    ports:
-      - "3000:3000"
-    depends_on:
-      - api
-    environment:
-      - NEXT_PUBLIC_API_URL=http://localhost:6060
+      - WHISPER_MODEL=base
 
 volumes:
   pgdata:

@@ -97,7 +97,7 @@ export default function ChatInterface() {
                         <Brain className="text-purple-500" size={24} />
                     </div>
                     <div>
-                        <h2 className="font-bold text-zinc-100">Brain Sync Session</h2>
+                        <h2 className="font-bold text-zinc-100">Inteligencia Artificial</h2>
                         <p className="text-xs text-zinc-500">
                             Ollama Engine: Phi-3 Mini
                         </p>

@@ -14,11 +14,14 @@ The backend is the core intelligence of the system. It handles data persistence,
 
 *   **Framework**: Express.js with TypeScript.
 *   **Architecture Pattern**: Hexagonal / Clean Architecture.
-    *   **Domain**: Core business logic and interfaces (e.g., `Note`, `ChatService`).
-    *   **Application**: Use cases and service implementations.
+    *   **Domain**: Core business logic and interfaces (e.g., `Note`, `ChatService`, `BehaviorRepository`).
+    *   **Application**: Use cases and service implementations (`IndexNote`, `ChatService`, `AgenticService`).
     *   **Infrastructure**: External adapters (Database, LLM Providers, HTTP Controllers).
 *   **Database**: PostgreSQL accessed via **Drizzle ORM**.
     *   Stores raw notes and their vector embeddings (using `pgvector`).
+    *   Stores behavioral data: `emotions_log`, `triggers`, `behavior_outcomes`.
+    *   Stores agentic outputs: `daily_summaries`, `routines`.
+    *   Stores graph relationships: `relationships` (GraphRAG).
 
 #### RAG Pipeline (Retrieval-Augmented Generation)
 The RAG implementation allows the AI to "chat" with your notes.
@@ -29,11 +32,27 @@ The RAG implementation allows the AI to "chat" with your notes.
 3.  **Augmentation**: The retrieved notes are injected into the system prompt as "Context".
 4.  **Generation**: The LLM (`phi3:mini`) generates an answer based *only* on that context.
 
+#### Behavioral Intelligence & Agents (Phase 1 & 2)
+The system now includes proactive agents and structured analysis:
+*   **Journal Analysis**: When a note is saved, `JournalAnalysisService` extracts structured data (Emotions, Triggers, Actions) and saves it to the DB.
+*   **Daily Auditor**: An agent (`AgenticService`) that analyzes all notes from a specific day to generate a summary and risk assessment.
+*   **Routine Generator**: An agent that creates a daily schedule based on the previous day's risk level and summary.
+
+#### Multimodality (Phase 3)
+The system can now process audio inputs:
+*   **Voice Journaling**: Users can record audio notes which are transcribed locally using **Faster-Whisper** (via a dedicated Docker container) and saved as text notes.
+
+#### GraphRAG (Phase 4)
+The system implements a Graph-Relational approach to find hidden connections:
+*   **Graph Construction**: When a note is analyzed, the system extracts relationships (e.g., "Argument" -> CAUSES -> "Anxiety") and saves them to the `relationships` table.
+*   **Graph Retrieval**: When answering questions, the `ChatService` queries this graph to find contextual links related to the retrieved notes, providing deeper insights into cause-and-effect patterns.
+
 #### Local AI & Ollama Integration
 The project relies entirely on local inference, ensuring privacy and offline capability.
 *   **Provider**: **Ollama** running locally (usually port `11434`).
 *   **LLM Model**: `phi3:mini` (optimized for speed and low resource usage).
 *   **Embedding Model**: `nomic-embed-text` (high-quality text embeddings).
+*   **Speech-to-Text**: **Faster-Whisper** running in a Docker container (port `8000`).
 *   **Orchestration**: **LangChain** (`@langchain/ollama`) is used to interface with Ollama, manage prompts, and handle streaming responses.
 
 #### Streaming with SSE (Server-Sent Events)
@@ -99,19 +118,24 @@ When a user creates a new note, the following process occurs:
 4.  **Persistence**:
     *   The `DrizzleNoteRepository` saves the note to the PostgreSQL database.
     *   It stores the `id`, `content`, `createdAt`, and the generated `embedding`.
+5.  **Analysis (Phase 1 & 4)**:
+    *   `JournalAnalysisService` analyzes the content to extract emotions, triggers, actions, AND relationships.
+    *   Entities are saved to `emotions_log`, `triggers`, and `behavior_outcomes`.
+    *   Relationships are saved to the `relationships` table, building the knowledge graph.
 
-### 2. Retrieval (RAG)
-When a user asks a question, the system performs a similarity search:
+### 2. Retrieval (RAG + GraphRAG)
+When a user asks a question, the system performs a hybrid search:
 
 1.  **Query Vectorization**:
-    *   The user's question is sent to the `VectorProvider` to generate a query vector (using the same model as ingestion).
+    *   The user's question is sent to the `VectorProvider` to generate a query vector.
 2.  **Similarity Search**:
-    *   The `DrizzleNoteRepository` executes a SQL query using `pgvector` functions.
-    *   It calculates the **Cosine Distance** (`1 - cosine_distance`) between the query vector and all note vectors in the database.
-    *   It selects the top `N` notes (e.g., top 5) with the highest similarity score.
-3.  **Context Construction**:
-    *   The content of these "similar notes" is concatenated to form the context.
-    *   This context is passed to the LLM to ground its response in the user's data.
+    *   The `DrizzleNoteRepository` finds the top `N` most similar notes using `pgvector`.
+3.  **Graph Context**:
+    *   The `GraphRepository` takes the IDs of the retrieved notes and finds related entities in the `relationships` table.
+    *   It retrieves connections like "Argument CAUSES Anxiety" relevant to the context.
+4.  **Context Construction**:
+    *   The content of the notes + the graph relationships are concatenated to form the final context.
+    *   This rich context is passed to the LLM to generate a comprehensive answer.
 
 ## Project Status & Next Steps
 
@@ -124,12 +148,20 @@ The project has reached a "feature complete" state for its initial scope. The co
     *   **Security**: Added `helmet`, rate limiting, and security headers.
     *   **Error Handling**: Implemented global error handling and validation middleware.
 *   **Developer Experience**:
-    *   **Dockerization**: The entire stack (Postgres, Ollama, API, Web) is containerized with Docker Compose for one-command setup.
+    *   **Dockerization**: The entire stack (Postgres, Ollama, API, Web, Faster-Whisper) is containerized with Docker Compose for one-command setup.
     *   **Logging**: Integrated `winston` for structured backend logging.
     *   **Testing**: Set up `vitest` and wrote initial unit tests for core services.
+*   **Phase 1 & 2 (Behavioral Intelligence)**:
+    *   Implemented structured entity extraction (Emotions, Triggers).
+    *   Implemented "Daily Auditor" and "Routine Generator" agents.
+*   **Phase 3 (Multimodality)**:
+    *   Implemented Voice Journaling using local Faster-Whisper.
+*   **Phase 4 (GraphRAG)**:
+    *   Implemented Graph-Relational schema and logic to extract and query relationships between entities.
 
 ### Future Roadmap
 While the current version is a robust MVP, several avenues exist for future development:
+*   **Image Analysis**: Complete Phase 3 by integrating Llava for image understanding.
 *   **User Authentication**: Implement user accounts to support multiple users in a deployed environment.
 *   **Advanced Note Management**: Add features like note editing, deletion, and tagging/organization.
 *   **Scalable Vector Search**: For larger datasets, migrate from `pgvector` to a dedicated vector database like Weaviate or Pinecone.

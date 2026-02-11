@@ -2,11 +2,17 @@ import { Note } from "../../domain/entities/Note";
 import type { VectorProvider } from "../providers/VectorProvider";
 import { randomUUID } from "crypto";
 import { NoteRepository } from '../../domain/entities/NoteRepository';
+import { JournalAnalysisService } from './JournalAnalysisService';
+import { BehaviorRepository, SavedEntity } from '../../domain/entities/BehaviorRepository';
+import { GraphRepository } from '../../domain/entities/GraphRepository';
 
 export class IndexNote {
     constructor(
         private noteRepository: NoteRepository,
-        private vectorProvider: VectorProvider
+        private vectorProvider: VectorProvider,
+        private analysisService: JournalAnalysisService,
+        private behaviorRepository: BehaviorRepository,
+        private graphRepository: GraphRepository
     ) {}
 
     async execute(content: string): Promise<Note> {
@@ -14,6 +20,7 @@ export class IndexNote {
             throw new Error("El contenido de la nota es demasiado corto.");
         }
 
+        // 1. Generate Embedding
         const embedding = await this.vectorProvider.generateEmbedding(content);
 
         const note = new Note(
@@ -23,7 +30,54 @@ export class IndexNote {
             new Date()
         );
 
+        // 2. Save Note
         await this.noteRepository.save(note);
+
+        // 3. Analyze Content (Behavioral Intelligence)
+        try {
+            const analysis = await this.analysisService.analyze(content);
+
+            // Save Entities and capture their IDs
+            const savedEmotions = await this.behaviorRepository.saveEmotions(
+                analysis.emotions.map(e => ({ noteId: note.id, emotion: e.name, intensity: e.intensity }))
+            );
+
+            const savedTriggers = await this.behaviorRepository.saveTriggers(
+                analysis.triggers.map(t => ({ noteId: note.id, description: t.description, category: t.category }))
+            );
+
+            const savedActions = await this.behaviorRepository.saveActions(
+                analysis.actions.map(a => ({ noteId: note.id, action: a.description, outcomeType: a.type }))
+            );
+
+            // Combine all saved entities into a single lookup map
+            // Key: Description (lowercase), Value: ID
+            const entityMap = new Map<string, string>();
+            
+            [...savedEmotions, ...savedTriggers, ...savedActions].forEach(entity => {
+                entityMap.set(entity.description.toLowerCase(), entity.id);
+            });
+
+            // 4. Build Graph (Save Relationships)
+            for (const rel of analysis.relationships) {
+                const sourceId = entityMap.get(rel.source.toLowerCase());
+                const targetId = entityMap.get(rel.target.toLowerCase());
+
+                if (sourceId && targetId) {
+                    await this.graphRepository.createRelationship({
+                        sourceId,
+                        targetId,
+                        type: rel.type,
+                        weight: 1 // Default weight
+                    });
+                } else {
+                    console.warn(`Could not link entities: "${rel.source}" -> "${rel.target}". One or both not found in saved entities.`);
+                }
+            }
+
+        } catch (error) {
+            console.error("Error analyzing note:", error);
+        }
 
         return note;
     }
