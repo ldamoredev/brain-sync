@@ -1,5 +1,5 @@
 import { Request, Response, Router } from 'express';
-import { ChatService } from '../../../application/services/ChatService';
+import { Chat } from '../../../application/useCases/Chat';
 import { Controller } from '../interfaces/Controller';
 import { validateRequest } from '../middleware/validateRequest';
 import { askQuestionSchema } from '@brain-sync/types';
@@ -13,7 +13,7 @@ export class ChatController implements Controller {
     public path = '/ask';
     public router = Router() as any;
 
-    constructor(private chatService: ChatService) {
+    constructor(private chatService: Chat) {
         this.initializeRoutes();
     }
 
@@ -67,9 +67,6 @@ export class ChatController implements Controller {
         try {
             const stream = this.chatService.askStream(
                 question,
-                (sources) => {
-                    sendEvent('meta', { sources });
-                },
                 { signal: abortController.signal }
             );
 
@@ -77,11 +74,16 @@ export class ChatController implements Controller {
                 if (abortController.signal.aborted) {
                     break;
                 }
-                sendEvent('token', chunk);
-            }
-
-            if (!abortController.signal.aborted) {
-                sendEvent('done');
+                
+                if (chunk.type === 'token') {
+                    sendEvent('token', chunk.content);
+                } else if (chunk.type === 'meta') {
+                    sendEvent('meta', { sources: chunk.sources });
+                } else if (chunk.type === 'eval') {
+                    sendEvent('eval', { isFaithful: chunk.isFaithful, reasoning: chunk.reasoning });
+                } else if (chunk.type === 'done') {
+                    sendEvent('done');
+                }
             }
         } catch (err) {
             if (!abortController.signal.aborted) {

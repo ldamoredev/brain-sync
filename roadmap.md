@@ -20,7 +20,7 @@ pattern recognition, and agentic intervention.
 
 
 * **Implementation**:
-* Update `ChatService` to use **Function Calling** or **JSON Schema** extraction.
+* Update `Chat` to use **Function Calling** or **JSON Schema** extraction.
 * New Database Tables: `emotions_log`, `triggers`, `behavior_outcomes`.
 
 
@@ -48,6 +48,7 @@ pattern recognition, and agentic intervention.
 * **Voice Journaling**: Transcription of daily feelings using **Local Whisper** (Privacy-focused). [COMPLETED]
 * **Sentiment Analysis of Audio**: Detecting stress levels through vocal tone.
 * **Image Analysis**: Log photos of food, environments, or expressions to provide extra context. [PENDING]
+* **Spanish Support**: Full support for Spanish indexing, analysis, and retrieval. [COMPLETED]
 
 
 * **Implementation**:
@@ -70,16 +71,19 @@ pattern recognition, and agentic intervention.
 
 
 
-### Phase 5: Evaluation & Observability (The "Hardening")
+### Phase 5: Evaluation & Observability (The "Hardening") [COMPLETED]
 
 * **Goal**: Ensure the system is medically/emotionally safe and accurate.
 * **Features**:
-* **Fact-Checking Layer**: The system must cite specific past notes for every suggestion made.
-* **RAGas Implementation**: Quantitative measurement of "Faithfulness" and "Answer Relevancy."
+* **Fact-Checking Layer**: The system cites specific past notes for every suggestion made and has a verification loop to correct hallucinations. [COMPLETED]
+* **RAGas Implementation**: Quantitative measurement of "Faithfulness" and "Answer Relevancy" using a dedicated benchmark script. [COMPLETED]
+* **LLM Resilience**: Robust JSON repair mechanism to handle truncated or malformed responses from local LLMs. [COMPLETED]
 
 
 * **Implementation**:
-* Self-correction loops where a second LLM instance reviews the generated plan before display.
+* `EvaluationService` for automated response auditing.
+* `scripts/benchmark.ts` for performance measurement and seeding test scenarios (including Spanish).
+* `cleanJson` hardening in `JournalAnalysisService`.
 
 ---
 
@@ -103,6 +107,6 @@ pattern recognition, and agentic intervention.
 
 ### **How to use this with your Code Agent:**
 
-*"Based on the ROADMAP.md, let's start with **Phase 1**. We need to modify the `ChatController` and `ChatService` so that every time I save a journal entry, the AI extracts 'Emotional State', 'Risk Level', and 'Primary Trigger' into a structured JSON format to be saved in the database."*
+*"Based on the ROADMAP.md, let's start with **Phase 1**. We need to modify the `ChatController` and `Chat` so that every time I save a journal entry, the AI extracts 'Emotional State', 'Risk Level', and 'Primary Trigger' into a structured JSON format to be saved in the database."*
 
 **Would you like me to generate the SQL schema for these new behavioral tables so your code agent can run the migrations?**

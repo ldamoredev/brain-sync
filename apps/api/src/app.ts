@@ -8,12 +8,13 @@ import { ChatController } from './infrastructure/http/controllers/ChatController
 import { NoteController } from './infrastructure/http/controllers/NoteController';
 import { TranscriptionController } from './infrastructure/http/controllers/TranscriptionController';
 import { AgentController } from './infrastructure/http/controllers/AgentController';
-import { ChatService } from './application/services/ChatService';
-import { IndexNote } from './application/services/IndexNote';
-import { AgenticService } from './application/services/AgenticService';
-import { TranscriptionService } from './application/services/TranscriptionService';
-import { GetNotes } from './application/services/GetNotes';
-import { GetAgentData } from './application/services/GetAgentData';
+import { Chat } from './application/useCases/Chat';
+import { IndexNote } from './application/useCases/IndexNote';
+import { GenerateDailyAudit } from './application/useCases/GenerateDailyAudit';
+import { TranscriptAudio } from './application/useCases/TranscriptAudio';
+import { GetNotes } from './application/useCases/GetNotes';
+import { GetAgentData } from './application/useCases/GetAgentData';
+import { GenerateRoutine } from './application/useCases/GenerateRoutine';
 
 export class App {
     public app: express.Application;
@@ -46,12 +47,13 @@ export class App {
     }
 
     private initializeControllers() {
-        const chatController = new ChatController(this.core.getService(ChatService));
-        const noteController = new NoteController(this.core.getService(IndexNote), this.core.getService(GetNotes));
-        const transcriptionController = new TranscriptionController(this.core.getService(TranscriptionService));
+        const chatController = new ChatController(this.core.getUseCase(Chat));
+        const noteController = new NoteController(this.core.getUseCase(IndexNote), this.core.getUseCase(GetNotes));
+        const transcriptionController = new TranscriptionController(this.core.getUseCase(TranscriptAudio));
         const agentController = new AgentController(
-            this.core.getService(AgenticService),
-            this.core.getService(GetAgentData),
+            this.core.getUseCase(GenerateDailyAudit),
+            this.core.getUseCase(GenerateRoutine),
+            this.core.getUseCase(GetAgentData),
         );
         const controllers = [
             chatController,

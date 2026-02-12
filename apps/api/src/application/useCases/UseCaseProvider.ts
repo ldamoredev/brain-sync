@@ -1,6 +1,6 @@
 export type SConstructor<T> = new (...args: any[]) => T;
 
-export class ServiceProvider {
+export class UseCaseProvider {
     private cache = new Map<SConstructor<any>, any>();
     private factories = new Map<SConstructor<any>, () => any>();
 

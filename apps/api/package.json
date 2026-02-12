@@ -8,9 +8,10 @@
     "build": "tsc -p tsconfig.json",
     "start": "node dist/index.js",
     "db:push": "drizzle-kit push",
-    "db:reset": "ts-node-dev --transpile-only src/scripts/reset-db.ts",
+    "db:reset": "ts-node-dev --transpile-only scripts/reset-db.ts",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "benchmark": "ts-node-dev --transpile-only scripts/benchmark.ts"
   },
   "keywords": [],
   "author": "",

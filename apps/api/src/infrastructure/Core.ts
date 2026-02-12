@@ -1,5 +1,5 @@
 import { DrizzleRepositoryProvider } from './repositories/RepositoryProvider';
-import { SConstructor, ServiceProvider } from '../application/services/ServiceProvider';
+import { SConstructor, UseCaseProvider } from '../application/useCases/UseCaseProvider';
 import { DrizzleRoutineRepository } from './repositories/DrizzleRoutineRepository';
 import { BehaviorRepository } from '../domain/entities/BehaviorRepository';
 import { DrizzleBehaviorRepository } from './repositories/DrizzleBehaviorRepository';
@@ -12,18 +12,20 @@ import { DrizzleNoteRepository } from './repositories/DrizzleNoteRepository';
 import { RoutineRepository } from '../domain/entities/RoutineRepository';
 import { OllamaLLMProvider } from './providores/OllamaLLMProvider';
 import { OllamaVectorProvider } from './providores/OllamaVectorProvider';
-import { JournalAnalysisService } from '../application/services/JournalAnalysisService';
-import { ChatService } from '../application/services/ChatService';
-import { IndexNote } from '../application/services/IndexNote';
-import { AgenticService } from '../application/services/AgenticService';
-import { TranscriptionService } from '../application/services/TranscriptionService';
+import { JournalAnalysisService } from '../domain/services/JournalAnalysisService';
+import { Chat } from '../application/useCases/Chat';
+import { IndexNote } from '../application/useCases/IndexNote';
+import { GenerateDailyAudit } from '../application/useCases/GenerateDailyAudit';
+import { TranscriptAudio } from '../application/useCases/TranscriptAudio';
 import { OpenIATranscriptionProvider } from './providores/OpenIATranscriptionProvider';
-import { GetNotes } from '../application/services/GetNotes';
-import { GetAgentData } from '../application/services/GetAgentData';
+import { GetNotes } from '../application/useCases/GetNotes';
+import { GetAgentData } from '../application/useCases/GetAgentData';
+import { EvaluationService } from '../domain/services/EvaluationService';
+import { GenerateRoutine } from '../application/useCases/GenerateRoutine';
 
 export class Core {
     public repositories = new DrizzleRepositoryProvider();
-    public services = new ServiceProvider();
+    public useCases = new UseCaseProvider();
     private llmProvider = new OllamaLLMProvider();
     private vectorProvider = new OllamaVectorProvider();
     private transcriptionProvider = new OpenIATranscriptionProvider();
@@ -43,27 +45,31 @@ export class Core {
     }
 
     private initializeServices() {
-        this.services.register(JournalAnalysisService, () => new JournalAnalysisService(this.llmProvider));
-        this.services.register(ChatService, () => new ChatService(
+        this.useCases.register(Chat, () => new Chat(
             this.repositories,
             this.vectorProvider,
             this.llmProvider,
+            new EvaluationService(this.llmProvider)
         ));
-        this.services.register(IndexNote, () => new IndexNote(
+        this.useCases.register(IndexNote, () => new IndexNote(
             this.repositories,
             this.vectorProvider,
-            this.services.get(JournalAnalysisService),
+            new JournalAnalysisService(this.llmProvider),
         ));
-        this.services.register(AgenticService, () => new AgenticService(
+        this.useCases.register(GenerateDailyAudit, () => new GenerateDailyAudit(
             this.llmProvider,
             this.repositories,
         ));
-        this.services.register(TranscriptionService, () => new TranscriptionService(this.transcriptionProvider));
-        this.services.register(GetNotes, () => new GetNotes(this.repositories));
-        this.services.register(GetAgentData, () => new GetAgentData(this.repositories));
+        this.useCases.register(GenerateRoutine, () => new GenerateRoutine(
+            this.llmProvider,
+            this.repositories,
+        ));
+        this.useCases.register(TranscriptAudio, () => new TranscriptAudio(this.transcriptionProvider));
+        this.useCases.register(GetNotes, () => new GetNotes(this.repositories));
+        this.useCases.register(GetAgentData, () => new GetAgentData(this.repositories));
     }
 
-    public getService<T>(serviceType: SConstructor<T>): T {
-        return this.services.get(serviceType);
+    public getUseCase<T>(serviceType: SConstructor<T>): T {
+        return this.useCases.get(serviceType);
     }
 }

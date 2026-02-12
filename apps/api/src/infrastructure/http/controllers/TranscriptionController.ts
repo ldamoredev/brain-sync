@@ -1,5 +1,5 @@
 import { Request, Response, Router } from 'express';
-import { TranscriptionService } from '../../../application/services/TranscriptionService';
+import { TranscriptAudio } from '../../../application/useCases/TranscriptAudio';
 import { Controller } from '../interfaces/Controller';
 import multer from 'multer';
 import os from 'os';
@@ -9,7 +9,7 @@ export class TranscriptionController implements Controller {
     public router = Router() as any;
     private upload = multer({ dest: os.tmpdir() });
 
-    constructor(private transcriptionService: TranscriptionService) {
+    constructor(private transcriptionService: TranscriptAudio) {
         this.initializeRoutes();
     }
 
@@ -23,7 +23,7 @@ export class TranscriptionController implements Controller {
         }
 
         try {
-            const text = await this.transcriptionService.transcribe(req.file.path);
+            const text = await this.transcriptionService.execute(req.file.path);
             res.json({ text });
         } catch (error) {
             console.error('Transcription failed:', error);

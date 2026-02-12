@@ -16,7 +16,21 @@ export interface Note {
 export interface ChatResponse {
   answer: string;
   contextUsed: Pick<Note, 'id' | 'content'>[]; // Referencias a las notas que alimentaron la respuesta
+  isFaithful?: boolean;
+  metrics?: {
+    faithfulness: number;
+    answerRelevance: number;
+  };
 }
+
+/**
+ * Fragmento de stream para el chat
+ */
+export type ChatStreamChunk = 
+  | { type: 'token'; content: string }
+  | { type: 'meta'; sources: Pick<Note, 'id' | 'content'>[] }
+  | { type: 'eval'; isFaithful: boolean; reasoning: string }
+  | { type: 'done' };
 
 /**
  * Payload para la creación de nuevas notas

@@ -63,6 +63,12 @@ export default function ChatInterface() {
             setSources(meta.sources ?? meta);
         });
 
+        es.addEventListener('eval', (e) => {
+            const evaluation = JSON.parse(e.data);
+            console.log('Faithfulness evaluation:', evaluation);
+            // Optionally update UI to show if the answer was verified
+        });
+
         es.addEventListener('done', () => {
             es.close();
             setIsLoading(false);

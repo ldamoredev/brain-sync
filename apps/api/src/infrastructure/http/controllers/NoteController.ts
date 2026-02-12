@@ -1,6 +1,6 @@
 import { Request, Response, Router } from "express";
-import { IndexNote } from "../../../application/services/IndexNote";
-import { GetNotes } from "../../../application/services/GetNotes";
+import { IndexNote } from "../../../application/useCases/IndexNote";
+import { GetNotes } from "../../../application/useCases/GetNotes";
 import { Controller } from "../interfaces/Controller";
 import { validateRequest } from "../middleware/validateRequest";
 import { createNoteSchema } from "@brain-sync/types";

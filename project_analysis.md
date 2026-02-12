@@ -14,8 +14,8 @@ The backend is the core intelligence of the system. It handles data persistence,
 
 *   **Framework**: Express.js with TypeScript.
 *   **Architecture Pattern**: Hexagonal / Clean Architecture.
-    *   **Domain**: Core business logic and interfaces (e.g., `Note`, `ChatService`, `BehaviorRepository`).
-    *   **Application**: Use cases and service implementations (`IndexNote`, `ChatService`, `AgenticService`).
+    *   **Domain**: Core business logic and interfaces (e.g., `Note`, `Chat`, `BehaviorRepository`).
+    *   **Application**: Use cases and service implementations (`IndexNote`, `Chat`, `AgenticService`).
     *   **Infrastructure**: External adapters (Database, LLM Providers, HTTP Controllers).
 *   **Database**: PostgreSQL accessed via **Drizzle ORM**.
     *   Stores raw notes and their vector embeddings (using `pgvector`).
@@ -45,7 +45,14 @@ The system can now process audio inputs:
 #### GraphRAG (Phase 4)
 The system implements a Graph-Relational approach to find hidden connections:
 *   **Graph Construction**: When a note is analyzed, the system extracts relationships (e.g., "Argument" -> CAUSES -> "Anxiety") and saves them to the `relationships` table.
-*   **Graph Retrieval**: When answering questions, the `ChatService` queries this graph to find contextual links related to the retrieved notes, providing deeper insights into cause-and-effect patterns.
+*   **Graph Retrieval**: When answering questions, the `Chat` queries this graph to find contextual links related to the retrieved notes, providing deeper insights into cause-and-effect patterns.
+
+#### Evaluation & Observability (Phase 5)
+The system includes a dedicated layer to ensure response quality and system resilience:
+*   **Faithfulness Evaluation**: `EvaluationService` uses a specialized LLM prompt to verify if responses are grounded in the retrieved context, automatically correcting hallucinations when detected.
+*   **Quantitative Metrics**: Implementation of RAGas-style metrics (`faithfulness`, `answer relevance`) to measure system performance objectively.
+*   **JSON Hardening**: `JournalAnalysisService` features a robust JSON repair mechanism that handles truncated or malformed LLM outputs, ensuring stable operation even with smaller local models.
+*   **Benchmarking**: A dedicated benchmark suite (`scripts/benchmark.ts`) allows for automated testing of retrieval accuracy and evaluation metrics using the `Chat` use case.
 
 #### Local AI & Ollama Integration
 The project relies entirely on local inference, ensuring privacy and offline capability.
@@ -158,6 +165,10 @@ The project has reached a "feature complete" state for its initial scope. The co
     *   Implemented Voice Journaling using local Faster-Whisper.
 *   **Phase 4 (GraphRAG)**:
     *   Implemented Graph-Relational schema and logic to extract and query relationships between entities.
+*   **Phase 5 (Evaluation & Observability)**:
+    *   Implemented `EvaluationService` for faithfulness checks and hallucination correction.
+    *   Developed a benchmarking suite with RAGas metrics support.
+    *   Implemented robust JSON repair for resilient LLM integration.
 
 ### Future Roadmap
 While the current version is a robust MVP, several avenues exist for future development:

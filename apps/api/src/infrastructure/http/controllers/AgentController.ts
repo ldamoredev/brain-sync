@@ -1,14 +1,16 @@
 import { Request, Response, Router } from 'express';
 import { Controller } from '../interfaces/Controller';
-import { AgenticService } from '../../../application/services/AgenticService';
-import { GetAgentData } from '../../../application/services/GetAgentData';
+import { GenerateDailyAudit } from '../../../application/useCases/GenerateDailyAudit';
+import { GetAgentData } from '../../../application/useCases/GetAgentData';
+import { GenerateRoutine } from '../../../application/useCases/GenerateRoutine';
 
 export class AgentController implements Controller {
     public path = '/agents';
     public router = Router() as any;
 
     constructor(
-        private agenticService: AgenticService,
+        private generateDailyAudit: GenerateDailyAudit,
+        private generateRoutineUseCase: GenerateRoutine,
         private getAgentDataService: GetAgentData
     ) {
         this.initializeRoutes();
@@ -25,7 +27,7 @@ export class AgentController implements Controller {
     async generateAudit(req: Request, res: Response, next: any) {
         try {
             const date = req.body.date || new Date().toISOString().split('T')[0];
-            await this.agenticService.generateDailyAudit(date);
+            await this.generateDailyAudit.execute(date);
             res.json({ message: `Audit generated for ${date}` });
         } catch (error) {
             next(error);
@@ -47,7 +49,7 @@ export class AgentController implements Controller {
     async generateRoutine(req: Request, res: Response, next: any) {
         try {
             const date = req.body.date || new Date().toISOString().split('T')[0];
-            await this.agenticService.generateRoutine(date);
+            await this.generateRoutineUseCase.execute(date);
             res.json({ message: `Routine generated for ${date}` });
         } catch (error) {
             next(error);

@@ -1,23 +1,20 @@
-// apps/api/src/application/services/ChatService.ts
-
-import { ChatResponse } from '@brain-sync/types';
+import { ChatResponse, ChatStreamChunk } from '@brain-sync/types';
 import { VectorProvider } from '../providers/VectorProvider';
 import { ChatMessage, LLMProvider } from '../providers/LLMProvider';
 import { NoteRepository } from '../../domain/entities/NoteRepository';
 import { GraphRepository } from '../../domain/entities/GraphRepository';
 import { RepositoryProvider } from '../../infrastructure/repositories/RepositoryProvider';
+import { EvaluationService } from '../../domain/services/EvaluationService';
 
-export class ChatService {
+export class Chat {
     constructor(
         private repositories: RepositoryProvider,
         private vectorProvider: VectorProvider,
         private llmProvider: LLMProvider,
+        private evaluationService?: EvaluationService
     ) {
     }
 
-    /**
-     * Procesa una pregunta del usuario usando la técnica RAG
-     */
     async ask(question: string): Promise<ChatResponse> {
         // 1. Convertir la pregunta en un vector (Embedding)
         const queryVector = await this.vectorProvider.generateEmbedding(question);
@@ -31,21 +28,22 @@ export class ChatService {
             return {
                 answer: 'No tengo notas guardadas que puedan responder a eso. ¿Quieres que guarde algo nuevo?',
                 contextUsed: [],
+                isFaithful: true
             };
         }
 
-        // 4. GraphRAG: Find contextual relationships
+        // 2. GraphRAG: Find contextual relationships
         const noteIds = similarNotes.map(n => n.id);
         const graphContext = await this.repositories.get(GraphRepository).findContextualRelationships(noteIds);
-        
+
         const graphContextString = graphContext.length > 0
             ? `\n\nRELACIONES ENCONTRADAS (GraphRAG):\n${graphContext.map(r => `- ${r.source} ${r.type} ${r.target}`).join('\n')}`
             : '';
 
-        // 5. Construir el contexto para "anclar" (Grounding) al modelo
+        // 3. Construir el contexto para "anclar" (Grounding) al modelo
         const context = similarNotes.map((n, i) => `[Nota ${i + 1}]: ${n.content}`).join('\n\n') + graphContextString;
 
-        // 6. Preparar los mensajes siguiendo la abstracción del LLMProvider
+        // 4. Preparar los mensajes siguiendo la abstracción del LLMProvider
         const messages: ChatMessage[] = [
             {
                 role: 'system',
@@ -67,12 +65,31 @@ export class ChatService {
             },
         ];
 
-        // 7. Generar la respuesta usando la IA inyectada
-        const answer = await this.llmProvider.generateResponse(messages);
+        // 5. Generar la respuesta usando la IA inyectada
+        let answer = await this.llmProvider.generateResponse(messages);
+        let isFaithful = true;
+        let metrics: { faithfulness: number; answerRelevance: number } | undefined;
 
-        // 8. Devolver la respuesta estructurada con las fuentes
+        // 6. Evaluación de veracidad (Phase 5: Evaluation & Observability)
+        if (this.evaluationService) {
+            const evaluation = await this.evaluationService.evaluateFaithfulness(question, context, answer);
+            isFaithful = evaluation.isFaithful;
+            if (!evaluation.isFaithful && evaluation.correctedAnswer) {
+                console.log(`[Eval] La respuesta original no era fiel al contexto. Corrigiendo...`);
+                console.log(`[Eval] Razonamiento: ${evaluation.reasoning}`);
+                answer = evaluation.correctedAnswer;
+                isFaithful = true; // Once corrected, we consider it faithful
+            }
+
+            // Calculate RAGas metrics for observability
+            metrics = await this.evaluationService.calculateRagasMetrics(question, context, answer);
+        }
+
+        // 7. Devolver la respuesta estructurada con las fuentes
         return {
             answer,
+            isFaithful,
+            metrics,
             contextUsed: similarNotes.map(n => ({
                 id: n.id,
                 content: n.content,
@@ -80,9 +97,9 @@ export class ChatService {
         };
     }
 
-    async* askStream(question: string, onSourcesFound?: (sources: any[]) => void, options?: {
+    async* askStream(question: string, options?: {
         signal?: AbortSignal
-    }): AsyncIterable<string> {
+    }): AsyncIterable<ChatStreamChunk> {
         const signal = options?.signal;
 
         // 1. RAG: Buscar notas relevantes
@@ -92,14 +109,12 @@ export class ChatService {
 
         if (signal?.aborted) return;
 
-        if (onSourcesFound) {
-            onSourcesFound(similarNotes.map(n => ({ id: n.id, content: n.content })));
-        }
+        yield { type: 'meta', sources: similarNotes.map(n => ({ id: n.id, content: n.content })) };
 
         // 2. GraphRAG: Find contextual relationships
         const noteIds = similarNotes.map(n => n.id);
         const graphContext = await this.repositories.get(GraphRepository).findContextualRelationships(noteIds);
-        
+
         const graphContextString = graphContext.length > 0
             ? `\n\nRELACIONES ENCONTRADAS (GraphRAG):\n${graphContext.map(r => `- ${r.source} ${r.type} ${r.target}`).join('\n')}`
             : '';
@@ -113,7 +128,17 @@ export class ChatService {
         const messages: ChatMessage[] = [
             {
                 role: 'system',
-                content: `Eres un asistente personal. Responde basándote en este contexto:\n\n${context}\n\nSi hay múltiples notas, trata cada una como una fuente distinta. Usa las relaciones del grafo para conectar ideas.`
+                content: `Eres un asistente de notas personales. 
+        Responde la pregunta del usuario basándote ÚNICAMENTE en el siguiente contexto.
+        
+        CONTEXTO:
+        ${context}
+        
+        INSTRUCCIONES:
+        - Si la respuesta no está en el contexto, indica que no tienes esa información.
+        - Cita la fuente usando [Nota X] si es posible.
+        - Usa las "RELACIONES ENCONTRADAS" para explicar causas y efectos si es relevante.
+        - No mezcles información de diferentes notas si hablan de entidades distintas.`,
             },
             { role: 'user', content: question },
         ];
@@ -124,9 +149,28 @@ export class ChatService {
         const stream = this.llmProvider.generateStream(messages);
 
         // 6. Emitir cada fragmento
+        let fullAnswer = '';
         for await (const chunk of stream) {
             if (signal?.aborted) return;
-            yield chunk;
+            fullAnswer += chunk;
+            yield { type: 'token', content: chunk };
         }
+
+        // 7. Evaluación diferida (Phase 5: Evaluation & Observability)
+        if (this.evaluationService && fullAnswer) {
+            try {
+                const evaluation = await this.evaluationService.evaluateFaithfulness(question, context, fullAnswer);
+                yield { type: 'eval', isFaithful: evaluation.isFaithful, reasoning: evaluation.reasoning };
+                
+                if (!evaluation.isFaithful) {
+                    console.warn(`[Eval-Stream] Alerta de veracidad: La respuesta enviada podría contener alucinaciones.`);
+                    console.warn(`[Eval-Stream] Razonamiento: ${evaluation.reasoning}`);
+                }
+            } catch (err) {
+                console.error("[Eval-Stream] Error en evaluación:", err);
+            }
+        }
+        
+        yield { type: 'done' };
     }
 }

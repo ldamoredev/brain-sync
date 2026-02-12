@@ -1,6 +1,6 @@
 import 'dotenv/config';
-import { db } from '../infrastructure/db';
-import { notes, emotionsLog, triggers, behaviorOutcomes, dailySummaries, routines, relationships } from '../infrastructure/db/schema';
+import { db } from '../src/infrastructure/db';
+import { notes, emotionsLog, triggers, behaviorOutcomes, dailySummaries, routines, relationships } from '../src/infrastructure/db/schema';
 
 async function reset() {
     console.log('🗑️  Cleaning database...');
