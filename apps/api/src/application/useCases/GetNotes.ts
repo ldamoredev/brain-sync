@@ -5,11 +5,11 @@ import { RepositoryProvider } from '../../infrastructure/repositories/Repository
 export class GetNotes {
     constructor(private repositories: RepositoryProvider) {}
 
-    async getAll(): Promise<Note[]> {
+    async executeGetAll(): Promise<Note[]> {
         return this.repositories.get(NoteRepository).findAll();
     }
 
-    async getById(id: string): Promise<Note | undefined> {
+    async executeGetById(id: string): Promise<Note | undefined> {
         return this.repositories.get(NoteRepository).findById(id);
     }
 }

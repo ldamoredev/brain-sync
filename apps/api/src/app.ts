@@ -8,7 +8,7 @@ import { ChatController } from './infrastructure/http/controllers/ChatController
 import { NoteController } from './infrastructure/http/controllers/NoteController';
 import { TranscriptionController } from './infrastructure/http/controllers/TranscriptionController';
 import { AgentController } from './infrastructure/http/controllers/AgentController';
-import { Chat } from './application/useCases/Chat';
+import { Chat } from './application/useCases/chat/Chat';
 import { IndexNote } from './application/useCases/IndexNote';
 import { GenerateDailyAudit } from './application/useCases/GenerateDailyAudit';
 import { TranscriptAudio } from './application/useCases/TranscriptAudio';

@@ -13,7 +13,7 @@ import { RoutineRepository } from '../domain/entities/RoutineRepository';
 import { OllamaLLMProvider } from './providores/OllamaLLMProvider';
 import { OllamaVectorProvider } from './providores/OllamaVectorProvider';
 import { JournalAnalysisService } from '../domain/services/JournalAnalysisService';
-import { Chat } from '../application/useCases/Chat';
+import { Chat } from '../application/useCases/chat/Chat';
 import { IndexNote } from '../application/useCases/IndexNote';
 import { GenerateDailyAudit } from '../application/useCases/GenerateDailyAudit';
 import { TranscriptAudio } from '../application/useCases/TranscriptAudio';
@@ -22,6 +22,9 @@ import { GetNotes } from '../application/useCases/GetNotes';
 import { GetAgentData } from '../application/useCases/GetAgentData';
 import { EvaluationService } from '../domain/services/EvaluationService';
 import { GenerateRoutine } from '../application/useCases/GenerateRoutine';
+import { ChatPipeline } from '../application/useCases/chat/ChatPipeline';
+import { PromptBuilder } from '../application/useCases/chat/PromptBuilder';
+import { FaithfulnessGuard } from '../application/useCases/chat/FaithfulnessGuard';
 
 export class Core {
     public repositories = new DrizzleRepositoryProvider();
@@ -46,10 +49,13 @@ export class Core {
 
     private initializeServices() {
         this.useCases.register(Chat, () => new Chat(
-            this.repositories,
-            this.vectorProvider,
-            this.llmProvider,
-            new EvaluationService(this.llmProvider)
+            new ChatPipeline(
+                this.repositories,
+                this.vectorProvider,
+                this.llmProvider,
+                new PromptBuilder(),
+                new FaithfulnessGuard(new EvaluationService(this.llmProvider))
+            )
         ));
         this.useCases.register(IndexNote, () => new IndexNote(
             this.repositories,

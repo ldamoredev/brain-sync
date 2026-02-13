@@ -1,5 +1,5 @@
 import { Core } from '../src/infrastructure/Core';
-import { Chat } from '../src/application/useCases/Chat';
+import { Chat } from '../src/application/useCases/chat/Chat';
 import { IndexNote } from '../src/application/useCases/IndexNote';
 import { db } from '../src/infrastructure/db';
 import {
@@ -71,7 +71,7 @@ async function runBenchmark() {
         console.log(`❓ Question: ${test.question}`);
         
         try {
-            const result = await chatService.ask(test.question);
+            const result = await chatService.execute(test.question);
             console.log(`🤖 Answer: ${result.answer}`);
             
             if (result.metrics) {

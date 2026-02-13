@@ -1,7 +1,8 @@
 import 'dotenv/config';
-import { ChatMessage, LLMProvider } from '../../application/providers/LLMProvider';
+import { LLMProvider } from '../../application/providers/LLMProvider';
 import { ChatOllama } from '@langchain/ollama';
 import { AIMessage, HumanMessage, SystemMessage } from '@langchain/core/messages';
+import { ChatMessage } from '@brain-sync/types';
 
 export class OllamaLLMProvider implements LLMProvider {
     private model: ChatOllama;

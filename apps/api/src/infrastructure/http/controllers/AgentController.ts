@@ -36,7 +36,7 @@ export class AgentController implements Controller {
 
     async getAudit(req: Request, res: Response, next: any) {
         try {
-            const summary = await this.getAgentDataService.getAudit(req.params.date as any);
+            const summary = await this.getAgentDataService.executeGetAudit(req.params.date as any);
             if (!summary) {
                 return res.status(404).json({ message: "No audit found for this date" });
             }
@@ -58,7 +58,7 @@ export class AgentController implements Controller {
 
     async getRoutine(req: Request, res: Response, next: any) {
         try {
-            const routine = await this.getAgentDataService.getRoutine(req.params.date as any);
+            const routine = await this.getAgentDataService.executeGetRoutine(req.params.date as any);
             if (!routine) {
                 return res.status(404).json({ message: "No routine found for this date" });
             }
@@ -74,7 +74,7 @@ export class AgentController implements Controller {
             if (!activities || !Array.isArray(activities)) {
                 return res.status(400).json({ message: "Invalid activities format" });
             }
-            await this.getAgentDataService.updateRoutine(req.params.date as any, activities);
+            await this.getAgentDataService.executeUpdateRoutine(req.params.date as any, activities);
             res.json({ message: "Routine updated successfully" });
         } catch (error) {
             next(error);

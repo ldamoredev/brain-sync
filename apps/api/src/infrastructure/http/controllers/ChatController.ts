@@ -1,5 +1,5 @@
 import { Request, Response, Router } from 'express';
-import { Chat } from '../../../application/useCases/Chat';
+import { Chat } from '../../../application/useCases/chat/Chat';
 import { Controller } from '../interfaces/Controller';
 import { validateRequest } from '../middleware/validateRequest';
 import { askQuestionSchema } from '@brain-sync/types';
@@ -65,7 +65,7 @@ export class ChatController implements Controller {
         }, 15_000);
 
         try {
-            const stream = this.chatService.askStream(
+            const stream = this.chatService.executeStream(
                 question,
                 { signal: abortController.signal }
             );

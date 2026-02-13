@@ -1,4 +1,6 @@
-import { ChatMessage, LLMProvider } from '../../application/providers/LLMProvider';
+import { LLMProvider } from '../../application/providers/LLMProvider';
+import { JsonParser } from '../../application/utils/JsonParser';
+import { ChatMessage } from '@brain-sync/types';
 
 export interface EvaluationResult {
     isFaithful: boolean;
@@ -48,8 +50,7 @@ export class EvaluationService {
 
         try {
             const response = await this.llmProvider.generateResponse(messages);
-            const cleanJson = this.cleanJson(response);
-            const parsed = JSON.parse(cleanJson);
+            const parsed = JsonParser.parseSafe<any>(response, {});
 
             return {
                 isFaithful: !!parsed.isFaithful,
@@ -101,7 +102,7 @@ export class EvaluationService {
 
         try {
             const response = await this.llmProvider.generateResponse(messages);
-            const parsed = JSON.parse(this.cleanJson(response));
+            const parsed = JsonParser.parseSafe<any>(response, {});
             return {
                 faithfulness: parsed.faithfulness ?? 0,
                 answerRelevance: parsed.answerRelevance ?? 0
@@ -109,15 +110,5 @@ export class EvaluationService {
         } catch (e) {
             return { faithfulness: 0, answerRelevance: 0 };
         }
-    }
-
-    private cleanJson(text: string): string {
-        let clean = text.trim();
-        if (clean.startsWith('```json')) clean = clean.replace(/^```json\s*/, '').replace(/\s*```$/, '');
-        else if (clean.startsWith('```')) clean = clean.replace(/^```\s*/, '').replace(/\s*```$/, '');
-        const first = clean.indexOf('{');
-        const last = clean.lastIndexOf('}');
-        if (first !== -1 && last !== -1) clean = clean.substring(first, last + 1);
-        return clean;
     }
 }

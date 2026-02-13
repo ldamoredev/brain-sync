@@ -33,12 +33,12 @@ export class NoteController implements Controller {
     }
 
     async getAll(req: Request, res: Response) {
-        const notes = await this.getNotesUseCase.getAll();
+        const notes = await this.getNotesUseCase.executeGetAll();
         res.json(notes);
     }
 
     async getById(req: Request, res: Response, next: any) {
-        const note = await this.getNotesUseCase.getById(req.params.id as any);
+        const note = await this.getNotesUseCase.executeGetById(req.params.id as any);
         if (!note) {
             return next(new AppError('Note not found', 404));
         }

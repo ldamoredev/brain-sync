@@ -1,4 +1,6 @@
-import { LLMProvider, ChatMessage } from '../../application/providers/LLMProvider';
+import { LLMProvider } from '../../application/providers/LLMProvider';
+import { JsonParser } from '../../application/utils/JsonParser';
+import { ChatMessage } from '@brain-sync/types';
 
 export interface AnalysisResult {
     emotions: { name: string; intensity: number }[];
@@ -44,7 +46,7 @@ export class JournalAnalysisService {
         const response = await this.llmProvider.generateResponse(messages);
 
         try {
-            const cleanJson = this.cleanJson(response);
+            const cleanJson = this.repairJson(response);
             const parsed = JSON.parse(cleanJson);
 
             return {
@@ -74,53 +76,24 @@ export class JournalAnalysisService {
         }
     }
 
-    private cleanJson(text: string): string {
-        let clean = text.trim();
-        // Remove markdown code blocks if present
-        if (clean.startsWith('```json')) {
-            clean = clean.replace(/^```json\s*/, '').replace(/\s*```$/, '');
-        } else if (clean.startsWith('```')) {
-            clean = clean.replace(/^```\s*/, '').replace(/\s*```$/, '');
-        }
+    private repairJson(text: string): string {
+        let clean = JsonParser.clean(text);
 
-        // Find the first { and last }
-        const firstBrace = clean.indexOf('{');
-        const lastBrace = clean.lastIndexOf('}');
-
-        if (firstBrace !== -1 && lastBrace !== -1) {
-            clean = clean.substring(firstBrace, lastBrace + 1);
-        }
-
-        // Fix common JSON errors if it looks truncated or has trailing commas
-        // 1. Remove trailing commas before closing braces/brackets
-        clean = clean.replace(/,\s*([\]}])/g, '$1');
-
-        // 2. If it's missing the closing brace but we found a first one, try to close it
-        if (firstBrace !== -1 && lastBrace === -1) {
-            clean += '}';
-        }
-
-        // 3. Handle truncated JSON more robustly
+        // Handle truncated JSON more robustly
         try {
             JSON.parse(clean);
+            return clean;
         } catch (e) {
-            console.log(`[JournalAnalysisService] JSON.parse failed, attempting repair...`);
+            console.log(`[JournalAnalysisService] JSON.parse failed, attempting advanced repair...`);
 
             // Heuristic: find the last occurrence of a key value pair closure or a comma
-            // BUT, if it's an unterminated string, the repairPoint might be inside that string.
-            // Let's try to find the last valid structure end.
             const lastClosingBrace = clean.lastIndexOf('}');
             const lastClosingBracket = clean.lastIndexOf(']');
             const lastComma = clean.lastIndexOf(',');
 
-            // If it's an unterminated string error, we might have something like: "key": "value...
-            // or {"key": "val
-
             let repairPoint = Math.max(lastClosingBrace, lastClosingBracket);
 
-            // If the last thing is a comma after a closing brace/bracket, that's also a good place
             if (lastComma > repairPoint) {
-                // Check if the comma is likely after a valid object
                 const substring = clean.substring(0, lastComma);
                 if (substring.trim().endsWith('}') || substring.trim().endsWith(']')) {
                     repairPoint = lastComma;
@@ -133,7 +106,7 @@ export class JournalAnalysisService {
                     repaired = repaired.substring(0, repaired.length - 1);
                 }
 
-                // Now balance braces and brackets
+                // Balance braces and brackets
                 const openBraces = (repaired.match(/{/g) || []).length;
                 const closeBraces = (repaired.match(/}/g) || []).length;
                 const openBrackets = (repaired.match(/\[/g) || []).length;
@@ -155,7 +128,7 @@ export class JournalAnalysisService {
                 }
             }
 
-            // Fallback: search for the last "source", "target", or "type" and cut before it
+            // Fallback: strip last incomplete object
             const lastKey = Math.max(clean.lastIndexOf('"source"'), clean.lastIndexOf('"target"'), clean.lastIndexOf('"type"'), clean.lastIndexOf('"description"'), clean.lastIndexOf('"name"'));
             if (lastKey !== -1) {
                 const lastBeforeKey = clean.substring(0, lastKey).lastIndexOf('{');

@@ -7,15 +7,15 @@ export class GetAgentData {
         private repositories: RepositoryProvider,
     ) {}
 
-    async getAudit(date: string): Promise<DailySummary | null> {
+    async executeGetAudit(date: string): Promise<DailySummary | null> {
         return this.repositories.get(DailySummaryRepository).findByDate(date);
     }
 
-    async getRoutine(date: string): Promise<Routine | null> {
+    async executeGetRoutine(date: string): Promise<Routine | null> {
         return this.repositories.get(RoutineRepository).findByDate(date);
     }
 
-    async updateRoutine(date: string, activities: RoutineActivity[]): Promise<void> {
+    async executeUpdateRoutine(date: string, activities: RoutineActivity[]): Promise<void> {
         return this.repositories.get(RoutineRepository).update(date, activities);
     }
 }

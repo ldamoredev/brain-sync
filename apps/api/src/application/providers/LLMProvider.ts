@@ -1,7 +1,4 @@
-export interface ChatMessage {
-    role: 'system' | 'user' | 'assistant';
-    content: string;
-}
+import { ChatMessage } from '@brain-sync/types';
 
 export interface LLMProvider {
     generateResponse(messages: ChatMessage[]): Promise<string>;
