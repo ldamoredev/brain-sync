@@ -27,16 +27,17 @@ export class OllamaLLMProvider implements LLMProvider {
         return response.content as string;
     }
 
-    async *generateStream(messages: ChatMessage[]): AsyncIterable<string> {
+    async *generateStream(messages: ChatMessage[], signal?: AbortSignal): AsyncIterable<string> {
         const langChainMessages = messages.map(m => {
-            if (m.role === "system") return new SystemMessage(m.content);
-            if (m.role === "assistant") return new AIMessage(m.content);
+            if (m.role === 'system') return new SystemMessage(m.content);
+            if (m.role === 'assistant') return new AIMessage(m.content);
             return new HumanMessage(m.content);
         });
 
-        const stream = await this.model.stream(langChainMessages);
+        const stream = await this.model.stream(langChainMessages, { signal });
 
         for await (const chunk of stream) {
+            if (signal?.aborted) return;
             yield chunk.content as string;
         }
     }

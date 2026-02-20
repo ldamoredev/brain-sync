@@ -26,11 +26,11 @@ async function seedData(core: Core) {
     const indexNote = core.getUseCase(IndexNote);
 
     const entries = [
-        "Hoy me sentí muy ansioso porque tuve una discusión fuerte con mi jefe por el retraso en el proyecto.",
-        "Para calmar mi ansiedad después de la reunión, salí a caminar por el parque durante 30 minutos y me ayudó mucho.",
-        "He notado que cuando tomo café por la tarde, me cuesta mucho dormir y me siento más irritable.",
-        "Anoche dormí solo 4 horas. Hoy me siento agotado y con poca paciencia.",
-        "Escribir mis pensamientos en este diario me hace sentir más tranquilo y en control."
+        "Hoy tuve un día terrible en el trabajo, sentí mucha frustración porque mi jefe me gritó frente a todos. Al salir, sentí un impulso incontrolable y terminé consumiendo para evadirme de esa sensación de humillación.",
+        "Después de consumir anoche, hoy me desperté con un sentimiento de culpa horrible. Me arrepiento profundamente de haber cedido al impulso, siento que perdí todo el progreso que había logrado.",
+        "He notado que la soledad de los domingos por la tarde es mi mayor disparador. Me invade una tristeza profunda y la necesidad de llenar ese vacío me lleva a querer consumir.",
+        "Ayer logré aguantar las ganas de consumir a pesar de sentirme muy ansioso por los problemas económicos. Fui a una reunión de apoyo y eso me contuvo.",
+        "Cada vez que consumo me siento peor después. El alivio dura unos minutos, pero el arrepentimiento y la vergüenza duran días. Necesito identificar mejor mis emociones antes de actuar."
     ];
 
     for (const entry of entries) {
@@ -49,20 +49,20 @@ async function runBenchmark() {
 
     const testCases = [
         {
-            question: "¿Cómo me he sentido últimamente?",
-            expectedTopic: "emotions"
+            question: "¿Cómo me he sentido después de mis últimos consumos?",
+            expectedTopic: "regret/guilt"
         },
         {
-            question: "¿Qué disparadores de ansiedad he tenido?",
+            question: "¿Qué disparadores de consumo he identificado?",
             expectedTopic: "triggers"
         },
         {
-            question: "¿Qué actividades me han ayudado a reducir mi ansiedad?",
-            expectedTopic: "mitigation"
+            question: "¿Qué emociones me impulsan a consumir?",
+            expectedTopic: "emotions"
         },
         {
-            question: "¿Qué impacto tiene el café en mi bienestar según mis notas?",
-            expectedTopic: "substances"
+            question: "¿Qué actividades o estrategias me han ayudado a evitar el consumo?",
+            expectedTopic: "coping"
         }
     ];
 

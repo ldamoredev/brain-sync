@@ -6,7 +6,7 @@ import { FaithfulnessGuard } from './FaithfulnessGuard';
 import { ChatContext } from './ChatContext';
 import { NoteRepository } from '../../../domain/entities/NoteRepository';
 import { GraphRepository } from '../../../domain/entities/GraphRepository';
-import { ChatStreamEvent } from '@brain-sync/types/dist';
+import { ChatStreamEvent } from '@brain-sync/types';
 
 export class ChatPipeline {
     constructor(
@@ -81,23 +81,16 @@ export class ChatPipeline {
         await this.retrieve(ctx);
         if (ctx.signal?.aborted) return;
 
-        yield {
-            type: 'meta',
-            sources: ctx.notes.map(n => ({
-                id: n.id,
-                content: n.content
-            }))
-        };
-
         if (!ctx.notes.length) {
-            yield {
-                type: 'token',
-                content:
-                    'No tengo notas guardadas que puedan responder a eso.'
-            };
+            yield { type: 'token', content: 'No tengo notas guardadas que puedan responder a eso.' };
             yield { type: 'done' };
             return;
         }
+
+        yield {
+            type: 'meta',
+            sources: ctx.notes.map(n => ({ id: n.id, content: n.content }))
+        };
 
         await this.enrichGraph(ctx);
         this.buildContext(ctx);
@@ -107,7 +100,7 @@ export class ChatPipeline {
             ctx.builtContext
         );
 
-        const stream = this.llm.generateStream(ctx.messages);
+        const stream = this.llm.generateStream(ctx.messages, ctx.signal);
 
         for await (const chunk of stream) {
             if (ctx.signal?.aborted) return;
@@ -121,9 +114,7 @@ export class ChatPipeline {
         }
 
         if (this.faithfulnessGuard) {
-            for await (const event of this.faithfulnessGuard.verifyStream(
-                ctx
-            )) {
+            for await (const event of this.faithfulnessGuard.verifyStream(ctx)) {
                 yield event;
             }
         }

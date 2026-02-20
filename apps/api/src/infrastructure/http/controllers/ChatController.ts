@@ -46,11 +46,11 @@ export class ChatController implements Controller {
         // Abort handling
         // ─────────────────────────────────────────────
         const abortController = new AbortController();
-        
+
         const onClose = () => {
-            // if (!abortController.signal.aborted) {
-            //     abortController.abort();
-            // }
+            if (!abortController.signal.aborted) {
+                abortController.abort();
+            }
         };
 
         req.on('close', onClose);
@@ -76,7 +76,7 @@ export class ChatController implements Controller {
                 }
                 
                 if (chunk.type === 'token') {
-                    sendEvent('token', chunk.content);
+                    sendEvent('token', { content: chunk.content });
                 } else if (chunk.type === 'meta') {
                     sendEvent('meta', { sources: chunk.sources });
                 } else if (chunk.type === 'eval') {
