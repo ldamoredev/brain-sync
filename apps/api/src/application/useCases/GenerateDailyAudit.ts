@@ -15,10 +15,13 @@ export class GenerateDailyAudit {
     async execute(date: string): Promise<void> {
         const dayNotes = await this.getNotesForDay(date);
 
+        console.log(`Generating daily audit for ${date}: ${dayNotes.length} notes`);
         if (dayNotes.length === 0) return;
 
         const context = dayNotes.map(n => n.content).join('\n\n');
         const analysis = await this.analyzeNotes(context);
+        console.log('Analysis:', analysis);
+
 
         if (analysis) {
             await this.saveSummary(date, analysis);
@@ -27,6 +30,7 @@ export class GenerateDailyAudit {
 
     private async getNotesForDay(date: string) {
         const allNotes = await this.repositories.get(NoteRepository).findAll();
+        console.log('allNotes:', allNotes.length, 'notes', allNotes)
         return allNotes.filter(n => {
             const noteDate = new Date(n.createdAt).toISOString().split('T')[0];
             return noteDate === date;
@@ -54,6 +58,7 @@ export class GenerateDailyAudit {
 
         try {
             const response = await this.llmProvider.generateResponse(messages);
+            console.log('llm response', response)
             return JsonParser.parseSafe(response, null);
         } catch (e) {
             console.error('Failed to communicate with LLM for daily audit', e);

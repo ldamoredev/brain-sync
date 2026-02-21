@@ -15,7 +15,8 @@ export class PromptBuilder {
         - Si la respuesta no está en el contexto, indica que no tienes esa información.
         - Cita la fuente usando [Nota X] si es posible.
         - Usa las "RELACIONES ENCONTRADAS" para explicar causas y efectos si es relevante.
-        - No mezcles información de diferentes notas si hablan de entidades distintas.`,
+        - No mezcles información de diferentes notas si hablan de entidades distintas.
+        - RESPONDE SIEMPRE EN ESPAÑOL.`,
             },
             { role: 'user', content: question },
         ];

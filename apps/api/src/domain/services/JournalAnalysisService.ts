@@ -93,6 +93,26 @@ export class JournalAnalysisService {
 
             let repairPoint = Math.max(lastClosingBrace, lastClosingBracket);
 
+            // Special case: if it ends in a quote, it might be a truncated string
+            const lastQuote = clean.lastIndexOf('"');
+            if (lastQuote > repairPoint && (clean.match(/"/g) || []).length % 2 !== 0) {
+                // We have an open string, try to close it
+                const withClosedString = clean + '"';
+                try {
+                    // Re-evaluate repair point with closed string
+                    const rBrace = withClosedString.lastIndexOf('}');
+                    const rBracket = withClosedString.lastIndexOf(']');
+                    const rPoint = Math.max(rBrace, rBracket);
+                    if (rPoint !== -1) {
+                         let repaired = withClosedString.substring(0, rPoint + 1);
+                         // Balance and check
+                         repaired = this.balanceBraces(repaired);
+                         JSON.parse(repaired);
+                         return repaired;
+                    }
+                } catch (err) {}
+            }
+
             if (lastComma > repairPoint) {
                 const substring = clean.substring(0, lastComma);
                 if (substring.trim().endsWith('}') || substring.trim().endsWith(']')) {
@@ -106,18 +126,7 @@ export class JournalAnalysisService {
                     repaired = repaired.substring(0, repaired.length - 1);
                 }
 
-                // Balance braces and brackets
-                const openBraces = (repaired.match(/{/g) || []).length;
-                const closeBraces = (repaired.match(/}/g) || []).length;
-                const openBrackets = (repaired.match(/\[/g) || []).length;
-                const closeBrackets = (repaired.match(/]/g) || []).length;
-
-                for(let i=0; i < openBrackets - closeBrackets; i++) {
-                    repaired += ']';
-                }
-                for(let i=0; i < openBraces - closeBraces; i++) {
-                    repaired += '}';
-                }
+                repaired = this.balanceBraces(repaired);
 
                 try {
                     JSON.parse(repaired);
@@ -129,23 +138,19 @@ export class JournalAnalysisService {
             }
 
             // Fallback: strip last incomplete object
-            const lastKey = Math.max(clean.lastIndexOf('"source"'), clean.lastIndexOf('"target"'), clean.lastIndexOf('"type"'), clean.lastIndexOf('"description"'), clean.lastIndexOf('"name"'));
+            const lastKey = Math.max(
+                clean.lastIndexOf('"source"'), 
+                clean.lastIndexOf('"target"'), 
+                clean.lastIndexOf('"type"'), 
+                clean.lastIndexOf('"description"'), 
+                clean.lastIndexOf('"name"')
+            );
+            
             if (lastKey !== -1) {
                 const lastBeforeKey = clean.substring(0, lastKey).lastIndexOf('{');
                 if (lastBeforeKey !== -1) {
                     let repaired = clean.substring(0, lastBeforeKey).replace(/,\s*$/, '');
-
-                    const openBraces = (repaired.match(/{/g) || []).length;
-                    const closeBraces = (repaired.match(/}/g) || []).length;
-                    const openBrackets = (repaired.match(/\[/g) || []).length;
-                    const closeBrackets = (repaired.match(/]/g) || []).length;
-
-                    for(let i=0; i < openBrackets - closeBrackets; i++) {
-                        repaired += ']';
-                    }
-                    for(let i=0; i < openBraces - closeBraces; i++) {
-                        repaired += '}';
-                    }
+                    repaired = this.balanceBraces(repaired);
                     try {
                         JSON.parse(repaired);
                         console.log(`[JournalAnalysisService] Repair successful by stripping last incomplete object.`);
@@ -158,5 +163,21 @@ export class JournalAnalysisService {
         }
 
         return clean;
+    }
+
+    private balanceBraces(repaired: string): string {
+        const openBraces = (repaired.match(/{/g) || []).length;
+        const closeBraces = (repaired.match(/}/g) || []).length;
+        const openBrackets = (repaired.match(/\[/g) || []).length;
+        const closeBrackets = (repaired.match(/]/g) || []).length;
+
+        let result = repaired;
+        for(let i=0; i < openBrackets - closeBrackets; i++) {
+            result += ']';
+        }
+        for(let i=0; i < openBraces - closeBraces; i++) {
+            result += '}';
+        }
+        return result;
     }
 }
