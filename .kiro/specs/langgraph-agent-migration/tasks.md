@@ -315,8 +315,8 @@ This plan transforms the existing Daily Auditor and Routine Generator agents fro
     - **Validates: Design Property "Idempotent Resume"**
     - Verify resuming with same input produces same result
 
-- [ ] 11. Implement metrics collection and logging
-  - [ ] 11.1 Create MetricsCollector class
+- [-] 11. Implement metrics collection and logging
+  - [x] 11.1 Create MetricsCollector class
     - Create `apps/api/src/infrastructure/metrics/MetricsCollector.ts`
     - Implement recordExecution() method
     - Insert execution log into agent_execution_logs table
@@ -325,27 +325,27 @@ This plan transforms the existing Daily Auditor and Routine Generator agents fro
     - Use database transaction for atomicity
     - _Requirements: Design Section "MetricsCollector.recordExecution()"_
   
-  - [ ] 11.2 Integrate metrics collection into graphs
+  - [x] 11.2 Integrate metrics collection into graphs
     - Call metricsCollector.recordExecution() at end of execute()
     - Record agentType, status, durationMs, retryCount
     - Make metrics collection asynchronous (fire-and-forget)
     - _Requirements: Design Section "Metrics Collection Performance"_
   
-  - [ ] 11.3 Add structured logging with Winston
+  - [x] 11.3 Add structured logging with Winston
     - Add log statements at key execution points
     - Log node transitions with threadId and currentNode
     - Log errors with full context
     - Log checkpoint saves and loads
     - _Requirements: Design Section "Observability - Structured Logging"_
   
-  - [ ]* 11.4 Write unit tests for MetricsCollector
+  - [x] 11.4 Write unit tests for MetricsCollector
     - Test recordExecution creates execution log
     - Test recordExecution updates daily metrics
     - Test totalExecutions = successfulExecutions + failedExecutions
     - Test avgDurationMs calculation
     - _Requirements: Design Section "Unit Testing Approach"_
   
-  - [ ]* 11.5 Write property test for metrics accuracy
+  - [x] 11.5 Write property test for metrics accuracy
     - **Property 8: Metrics Accuracy**
     - **Validates: Design Property "Metrics Accuracy"**
     - Verify total executions equals sum of successful and failed

@@ -9,13 +9,18 @@ import { JsonParser } from '../utils/JsonParser';
 import logger from '../../infrastructure/logger';
 import { AgentGraph } from './AgentGraph';
 import { DailyAuditorState, GraphConfig, GraphExecutionResult } from './types';
+import { MetricsCollector } from '../../infrastructure/metrics/MetricsCollector';
 
 export class DailyAuditorGraph implements AgentGraph<DailyAuditorState, { date: string; approved?: boolean }, any> {
+    private metricsCollector: MetricsCollector;
+
     constructor(
         private llmProvider: LLMProvider,
         private repositories: RepositoryProvider,
         private checkpointer: CheckpointerProvider
-    ) {}
+    ) {
+        this.metricsCollector = new MetricsCollector();
+    }
 
     async execute(
         input: { date: string },
@@ -24,6 +29,7 @@ export class DailyAuditorGraph implements AgentGraph<DailyAuditorState, { date: 
         const threadId = config?.threadId || randomUUID();
         const maxRetries = config?.maxRetries ?? 3;
         const requiresHumanApproval = config?.requiresHumanApproval ?? false;
+        const startTime = Date.now();
 
         let state: DailyAuditorState;
 
@@ -98,18 +104,28 @@ export class DailyAuditorGraph implements AgentGraph<DailyAuditorState, { date: 
                 }
             }
 
-            return {
+            const result = {
                 success: state.status === 'completed',
                 state,
                 threadId,
                 status: state.status,
                 error: state.error
             };
+
+            // Record metrics asynchronously (fire-and-forget)
+            const durationMs = Date.now() - startTime;
+            this.recordMetricsAsync(threadId, state.status, durationMs, state.retryCount, input, state.analysis);
+
+            return result;
         } catch (error) {
             state.status = 'failed';
             state.error = error instanceof Error ? error.message : 'Unknown error';
             await this.checkpointer.save(threadId, state, state.currentNode, 'daily_auditor');
             logger.error('Execution failed', { threadId, error: state.error });
+
+            // Record metrics asynchronously (fire-and-forget)
+            const durationMs = Date.now() - startTime;
+            this.recordMetricsAsync(threadId, 'failed', durationMs, state.retryCount, input, null, state.error);
 
             return {
                 success: false,
@@ -388,5 +404,29 @@ export class DailyAuditorGraph implements AgentGraph<DailyAuditorState, { date: 
             requiresApproval: false,
             approved: false
         };
+    }
+
+    /**
+     * Records metrics asynchronously (fire-and-forget)
+     * This method does not block execution and errors are logged but not thrown
+     */
+    private recordMetricsAsync(
+        threadId: string,
+        status: 'completed' | 'failed',
+        durationMs: number,
+        retryCount: number,
+        input: any,
+        output?: any,
+        error?: string
+    ): void {
+        // Fire-and-forget: don't await, don't block execution
+        this.metricsCollector
+            .recordExecution(threadId, 'daily_auditor', status, durationMs, retryCount, input, output, error)
+            .catch((err) => {
+                logger.error('Failed to record metrics asynchronously', {
+                    threadId,
+                    error: err instanceof Error ? err.message : 'Unknown error',
+                });
+            });
     }
 }
