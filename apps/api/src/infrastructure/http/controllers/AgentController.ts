@@ -130,8 +130,8 @@ export class AgentController implements Controller {
 
     async approveExecution(req: Request, res: Response, next: any) {
         try {
-            const { threadId } = req.params;
-            const { approved } = req.body;
+            const { threadId } = req.params as any;
+            const { approved } = req.body as any;
 
             const checkpoint = await this.checkpointer.load(threadId);
             
@@ -162,9 +162,9 @@ export class AgentController implements Controller {
 
     async getExecutionStatus(req: Request, res: Response, next: any) {
         try {
-            const { threadId } = req.params;
+            const { threadId } = req.params as any;
 
-            const checkpoint = await this.checkpointer.load(threadId);
+            const checkpoint = await this.checkpointer.load(threadId) as any;
             
             if (!checkpoint) {
                 throw new AppError('Thread no encontrado', 404);

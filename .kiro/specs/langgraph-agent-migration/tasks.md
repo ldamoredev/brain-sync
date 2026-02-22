@@ -292,7 +292,7 @@ This plan transforms the existing Daily Auditor and Routine Generator agents fro
     - Return 500 if failed with error
     - _Requirements: Design Section "Controller Integration"_
   
-  - [ ]* 10.4 Write integration test for pause and resume flow
+  - [x] 10.4 Write integration test for pause and resume flow
     - Start Daily Auditor execution with high-risk scenario
     - Verify execution pauses at approval node
     - Resume with approval = true
@@ -301,7 +301,7 @@ This plan transforms the existing Daily Auditor and Routine Generator agents fro
     - Verify execution completes without saving
     - _Requirements: Design Section "Integration Testing Approach - Pause and Resume Flow"_
   
-  - [ ]* 10.5 Write integration test for validation retry flow
+  - [x] 10.5 Write integration test for validation retry flow
     - Start Routine Generator execution
     - Mock LLM to return invalid schedule first time
     - Verify validator detects errors
@@ -310,7 +310,7 @@ This plan transforms the existing Daily Auditor and Routine Generator agents fro
     - Verify execution completes successfully
     - _Requirements: Design Section "Integration Testing Approach - Validation Retry Flow"_
   
-  - [ ]* 10.6 Write property test for idempotent resume
+  - [x] 10.6 Write property test for idempotent resume
     - **Property 7: Idempotent Resume**
     - **Validates: Design Property "Idempotent Resume"**
     - Verify resuming with same input produces same result

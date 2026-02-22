@@ -57,11 +57,13 @@ describe('RoutineGeneratorGraph', () => {
         it('should fetch and format yesterday context from daily summary', async () => {
             const testDate = '2024-01-16';
             const mockSummary = {
+                id: "",
                 date: '2024-01-15',
                 summary: 'Día productivo con buen estado de ánimo',
                 riskLevel: 3,
-                keyInsights: ['Ejercicio matutino', 'Buena alimentación']
-            };
+                keyInsights: ['Ejercicio matutino', 'Buena alimentación'],
+                createdAt: '2024-01-15'
+            } as any;
 
             vi.mocked(mockDailySummaryRepository.findByDate).mockResolvedValue(mockSummary);
             vi.mocked(mockLLMProvider.generateResponse).mockResolvedValue(JSON.stringify({
@@ -867,7 +869,7 @@ describe('RoutineGeneratorGraph', () => {
             await graph.cancel(threadId);
 
             expect(mockCheckpointer.save).toHaveBeenCalled();
-            const saveCall = vi.mocked(mockCheckpointer.save).mock.calls[0];
+            const saveCall = vi.mocked(mockCheckpointer.save).mock.calls[0] as any;
             expect(saveCall[1].status).toBe('failed');
             expect(saveCall[1].error).toBe('Execution cancelled by user');
         });
