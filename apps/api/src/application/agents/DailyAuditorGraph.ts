@@ -6,10 +6,12 @@ import { NoteRepository } from '../../domain/entities/NoteRepository';
 import { DailySummaryRepository } from '../../domain/entities/DailySummaryRepository';
 import { ChatMessage } from '@brain-sync/types';
 import { JsonParser } from '../utils/JsonParser';
+import { sanitizeInput } from '../utils/sanitizeInput';
 import logger from '../../infrastructure/logger';
 import { AgentGraph } from './AgentGraph';
 import { DailyAuditorState, GraphConfig, GraphExecutionResult } from './types';
 import { MetricsCollector } from '../../infrastructure/metrics/MetricsCollector';
+import { AppError } from '../../domain/errors/AppError';
 
 export class DailyAuditorGraph implements AgentGraph<DailyAuditorState, { date: string; approved?: boolean }, any> {
     private metricsCollector: MetricsCollector;
@@ -29,6 +31,7 @@ export class DailyAuditorGraph implements AgentGraph<DailyAuditorState, { date: 
         const threadId = config?.threadId || randomUUID();
         const maxRetries = config?.maxRetries ?? 3;
         const requiresHumanApproval = config?.requiresHumanApproval ?? false;
+        const timeout = config?.timeout ?? 300000; // Default 5 minutes
         const startTime = Date.now();
 
         let state: DailyAuditorState;
@@ -37,7 +40,7 @@ export class DailyAuditorGraph implements AgentGraph<DailyAuditorState, { date: 
         if (config?.threadId) {
             const checkpoint = await this.checkpointer.load<DailyAuditorState>(config.threadId);
             if (!checkpoint) {
-                throw new Error(`Checkpoint not found for threadId: ${config.threadId}`);
+                throw new AppError('Thread de ejecución no encontrado', 404);
             }
             state = checkpoint.state;
             logger.info('Restored state from checkpoint', { threadId, currentNode: state.currentNode });
@@ -46,10 +49,67 @@ export class DailyAuditorGraph implements AgentGraph<DailyAuditorState, { date: 
             logger.info('Created initial state', { threadId, date: input.date });
         }
 
+        // Create timeout promise
+        const timeoutPromise = new Promise<never>((_, reject) => {
+            setTimeout(() => reject(new Error('Execution timeout exceeded')), timeout);
+        });
+
+        // Create execution promise
+        const executionPromise = this.executeGraph(state, threadId, maxRetries, requiresHumanApproval, startTime, input);
+
+        try {
+            // Race execution against timeout
+            return await Promise.race([executionPromise, timeoutPromise]);
+        } catch (error) {
+            if (error instanceof Error && error.message === 'Execution timeout exceeded') {
+                // Handle timeout
+                state.status = 'failed';
+                state.error = 'Tiempo de ejecución excedido';
+                await this.checkpointer.save(threadId, state, state.currentNode, 'daily_auditor');
+                logger.error('Execution timeout exceeded', { threadId, timeout });
+
+                // Record metrics asynchronously
+                const durationMs = Date.now() - startTime;
+                this.recordMetricsAsync(threadId, 'failed', durationMs, state.retryCount, input, null, state.error);
+
+                return {
+                    success: false,
+                    state,
+                    threadId,
+                    status: 'failed',
+                    error: state.error
+                };
+            }
+            throw error;
+        }
+    }
+
+    private async executeGraph(
+        state: DailyAuditorState,
+        threadId: string,
+        maxRetries: number,
+        requiresHumanApproval: boolean,
+        startTime: number,
+        input: { date: string }
+    ): Promise<GraphExecutionResult<DailyAuditorState>> {
+        logger.info('Execution started', { 
+            threadId, 
+            agentType: 'daily_auditor',
+            date: input.date,
+            timestamp: new Date().toISOString()
+        });
+
         try {
             // Execute graph nodes based on currentNode
             while (state.status === 'running') {
                 const previousNode = state.currentNode;
+                const nodeStartTime = Date.now();
+
+                logger.info('Node execution started', { 
+                    threadId, 
+                    node: state.currentNode,
+                    timestamp: new Date().toISOString()
+                });
 
                 switch (state.currentNode) {
                     case 'start':
@@ -68,6 +128,13 @@ export class DailyAuditorGraph implements AgentGraph<DailyAuditorState, { date: 
                     case 'awaitingApproval':
                         // This node is a pause point - execution should stop here
                         // Resume will handle moving to the next node
+                        const nodeDuration = Date.now() - nodeStartTime;
+                        logger.info('Node execution completed', { 
+                            threadId, 
+                            node: state.currentNode,
+                            durationMs: nodeDuration,
+                            timestamp: new Date().toISOString()
+                        });
                         return {
                             success: true,
                             state,
@@ -86,6 +153,15 @@ export class DailyAuditorGraph implements AgentGraph<DailyAuditorState, { date: 
                     default:
                         throw new Error(`Unknown node: ${state.currentNode}`);
                 }
+
+                const nodeDuration = Date.now() - nodeStartTime;
+                logger.info('Node execution completed', { 
+                    threadId, 
+                    node: previousNode,
+                    nextNode: state.currentNode,
+                    durationMs: nodeDuration,
+                    timestamp: new Date().toISOString()
+                });
 
                 // Save checkpoint after each node transition
                 if (previousNode !== state.currentNode) {
@@ -112,16 +188,34 @@ export class DailyAuditorGraph implements AgentGraph<DailyAuditorState, { date: 
                 error: state.error
             };
 
-            // Record metrics asynchronously (fire-and-forget)
-            const durationMs = Date.now() - startTime;
-            this.recordMetricsAsync(threadId, state.status, durationMs, state.retryCount, input, state.analysis);
+            const totalDuration = Date.now() - startTime;
+            logger.info('Execution completed', { 
+                threadId, 
+                agentType: 'daily_auditor',
+                status: state.status,
+                totalDurationMs: totalDuration,
+                timestamp: new Date().toISOString()
+            });
+
+            // Record metrics asynchronously (fire-and-forget) only for terminal states
+            if (state.status === 'completed' || state.status === 'failed') {
+                const durationMs = Date.now() - startTime;
+                this.recordMetricsAsync(threadId, state.status, durationMs, state.retryCount, input, state.analysis);
+            }
 
             return result;
         } catch (error) {
+            const totalDuration = Date.now() - startTime;
             state.status = 'failed';
             state.error = error instanceof Error ? error.message : 'Unknown error';
             await this.checkpointer.save(threadId, state, state.currentNode, 'daily_auditor');
-            logger.error('Execution failed', { threadId, error: state.error });
+            logger.error('Execution failed', { 
+                threadId, 
+                agentType: 'daily_auditor',
+                error: state.error,
+                totalDurationMs: totalDuration,
+                timestamp: new Date().toISOString()
+            });
 
             // Record metrics asynchronously (fire-and-forget)
             const durationMs = Date.now() - startTime;
@@ -144,7 +238,7 @@ export class DailyAuditorGraph implements AgentGraph<DailyAuditorState, { date: 
         const checkpoint = await this.checkpointer.load<DailyAuditorState>(threadId);
         
         if (!checkpoint) {
-            throw new Error(`Checkpoint not found for threadId: ${threadId}`);
+            throw new AppError('Thread de ejecución no encontrado', 404);
         }
 
         const state = checkpoint.state;
@@ -178,7 +272,7 @@ export class DailyAuditorGraph implements AgentGraph<DailyAuditorState, { date: 
         const checkpoint = await this.checkpointer.load<DailyAuditorState>(threadId);
         
         if (!checkpoint) {
-            throw new Error(`Checkpoint not found for threadId: ${threadId}`);
+            throw new AppError('Thread de ejecución no encontrado', 404);
         }
 
         return {
@@ -191,7 +285,7 @@ export class DailyAuditorGraph implements AgentGraph<DailyAuditorState, { date: 
         const checkpoint = await this.checkpointer.load<DailyAuditorState>(threadId);
         
         if (!checkpoint) {
-            throw new Error(`Checkpoint not found for threadId: ${threadId}`);
+            throw new AppError('Thread de ejecución no encontrado', 404);
         }
 
         checkpoint.state.status = 'failed';
@@ -206,41 +300,57 @@ export class DailyAuditorGraph implements AgentGraph<DailyAuditorState, { date: 
     private async fetchNotesNode(state: DailyAuditorState): Promise<DailyAuditorState> {
         logger.info('Executing fetchNotes node', { threadId: state.threadId, date: state.date });
 
-        const allNotes = await this.repositories.get(NoteRepository).findAll();
-        const dayNotes = allNotes.filter(n => {
-            const noteDate = new Date(n.createdAt).toISOString().split('T')[0];
-            return noteDate === state.date;
-        });
+        try {
+            const allNotes = await this.repositories.get(NoteRepository).findAll();
+            const dayNotes = allNotes.filter(n => {
+                const noteDate = new Date(n.createdAt).toISOString().split('T')[0];
+                return noteDate === state.date;
+            });
 
-        logger.info('Notes fetched', { threadId: state.threadId, count: dayNotes.length });
+            logger.info('Notes fetched', { threadId: state.threadId, count: dayNotes.length });
 
-        // If no notes found, complete execution
-        if (dayNotes.length === 0) {
+            // If no notes found, complete execution
+            if (dayNotes.length === 0) {
+                return {
+                    ...state,
+                    notes: [],
+                    currentNode: 'end',
+                    status: 'completed',
+                    updatedAt: new Date()
+                };
+            }
+
             return {
                 ...state,
-                notes: [],
-                currentNode: 'end',
-                status: 'completed',
+                notes: dayNotes.map(n => ({
+                    id: n.id,
+                    content: n.content,
+                    createdAt: n.createdAt
+                })),
+                currentNode: 'analyzeNotes',
                 updatedAt: new Date()
             };
+        } catch (error) {
+            const errorMessage = error instanceof Error ? error.message : 'Unknown database error';
+            logger.error('Database error while fetching notes', {
+                threadId: state.threadId,
+                date: state.date,
+                error: errorMessage
+            });
+            
+            throw new AppError(
+                'Database temporarily unavailable - failed to fetch notes',
+                500
+            );
         }
-
-        return {
-            ...state,
-            notes: dayNotes.map(n => ({
-                id: n.id,
-                content: n.content,
-                createdAt: n.createdAt
-            })),
-            currentNode: 'analyzeNotes',
-            updatedAt: new Date()
-        };
     }
 
     private async analyzeNotesNode(state: DailyAuditorState, maxRetries: number): Promise<DailyAuditorState> {
         logger.info('Executing analyzeNotes node', { threadId: state.threadId, retryCount: state.retryCount });
 
-        const context = state.notes.map(n => n.content).join('\n\n');
+        // Sanitize note content before sending to LLM
+        const sanitizedNotes = state.notes.map(n => sanitizeInput(n.content));
+        const context = sanitizedNotes.join('\n\n');
         
         const prompt = `
         Actúa como un "Auditor Diario" para la recuperación y salud emocional.
@@ -265,6 +375,11 @@ export class DailyAuditorGraph implements AgentGraph<DailyAuditorState, { date: 
             const analysis = JsonParser.parseSafe(response, null);
 
             if (!analysis) {
+                logger.warn('JSON parsing failed', { 
+                    threadId: state.threadId, 
+                    rawResponse: response,
+                    retryCount: state.retryCount
+                });
                 throw new Error('Failed to parse LLM response as JSON');
             }
 
@@ -284,25 +399,34 @@ export class DailyAuditorGraph implements AgentGraph<DailyAuditorState, { date: 
         } catch (error) {
             const newRetryCount = state.retryCount + 1;
             
-            logger.warn('Analysis failed, retrying', { 
-                threadId: state.threadId, 
-                retryCount: newRetryCount,
-                error: error instanceof Error ? error.message : 'Unknown error'
-            });
-
             if (newRetryCount >= maxRetries) {
-                logger.error('Max retries exceeded', { threadId: state.threadId });
+                const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+                logger.error('Ejecución fallida después de alcanzar el máximo de reintentos', { 
+                    threadId: state.threadId,
+                    maxRetries,
+                    error: errorMessage
+                });
                 return {
                     ...state,
                     status: 'failed',
-                    error: `Failed to analyze notes after ${maxRetries} retries: ${error instanceof Error ? error.message : 'Unknown error'}`,
+                    error: `Failed to analyze notes after ${maxRetries} retries: ${errorMessage}`,
                     retryCount: newRetryCount,
                     updatedAt: new Date()
                 };
             }
 
-            // Exponential backoff
-            const backoffMs = Math.pow(2, newRetryCount) * 1000;
+            // Exponential backoff with jitter, capped at 10 seconds
+            const baseBackoffMs = Math.pow(2, newRetryCount) * 1000;
+            const jitterMs = Math.random() * 1000;
+            const backoffMs = Math.min(10000, baseBackoffMs + jitterMs);
+            
+            logger.warn('Análisis falló, reintentando con backoff exponencial', { 
+                threadId: state.threadId, 
+                retryCount: newRetryCount,
+                backoffMs: Math.round(backoffMs),
+                error: error instanceof Error ? error.message : 'Unknown error'
+            });
+
             await new Promise(resolve => setTimeout(resolve, backoffMs));
 
             return {
@@ -376,17 +500,16 @@ export class DailyAuditorGraph implements AgentGraph<DailyAuditorState, { date: 
                 updatedAt: new Date()
             };
         } catch (error) {
-            logger.error('Failed to save summary', { 
+            const errorMessage = error instanceof Error ? error.message : 'Unknown database error';
+            logger.error('Database error while saving summary', { 
                 threadId: state.threadId, 
-                error: error instanceof Error ? error.message : 'Unknown error' 
+                error: errorMessage
             });
             
-            return {
-                ...state,
-                status: 'failed',
-                error: `Failed to save summary: ${error instanceof Error ? error.message : 'Unknown error'}`,
-                updatedAt: new Date()
-            };
+            throw new AppError(
+                'Database temporarily unavailable - failed to save summary',
+                500
+            );
         }
     }
 

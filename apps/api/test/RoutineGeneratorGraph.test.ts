@@ -606,7 +606,7 @@ describe('RoutineGeneratorGraph', () => {
             vi.mocked(mockCheckpointer.load).mockResolvedValue(null);
 
             await expect(graph.resume(threadId, { approved: true })).rejects.toThrow(
-                'Checkpoint not found for threadId: non-existent-thread'
+                'Thread de ejecución no encontrado'
             );
         });
 
@@ -771,7 +771,7 @@ describe('RoutineGeneratorGraph', () => {
 
             expect(result.success).toBe(false);
             expect(result.status).toBe('failed');
-            expect(result.state.error).toContain('Failed to save routine');
+            expect(result.state.error).toContain('Database temporarily unavailable');
         }, 10000);
 
         it('should handle JSON parsing failure in scheduler', async () => {
@@ -832,7 +832,7 @@ describe('RoutineGeneratorGraph', () => {
             vi.mocked(mockCheckpointer.load).mockResolvedValue(null);
 
             await expect(graph.getStatus(threadId)).rejects.toThrow(
-                'Checkpoint not found for threadId: non-existent-thread'
+                'Thread de ejecución no encontrado'
             );
         });
     });
@@ -880,7 +880,7 @@ describe('RoutineGeneratorGraph', () => {
             vi.mocked(mockCheckpointer.load).mockResolvedValue(null);
 
             await expect(graph.cancel(threadId)).rejects.toThrow(
-                'Checkpoint not found for threadId: non-existent-thread'
+                'Thread de ejecución no encontrado'
             );
         });
     });

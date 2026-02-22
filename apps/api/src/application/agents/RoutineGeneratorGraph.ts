@@ -6,10 +6,12 @@ import { DailySummaryRepository } from '../../domain/entities/DailySummaryReposi
 import { RoutineRepository } from '../../domain/entities/RoutineRepository';
 import { ChatMessage } from '@brain-sync/types';
 import { JsonParser } from '../utils/JsonParser';
+import { sanitizeInput } from '../utils/sanitizeInput';
 import logger from '../../infrastructure/logger';
 import { AgentGraph } from './AgentGraph';
 import { RoutineGeneratorState, GraphConfig, GraphExecutionResult } from './types';
 import { MetricsCollector } from '../../infrastructure/metrics/MetricsCollector';
+import { AppError } from '../../domain/errors/AppError';
 
 export class RoutineGeneratorGraph implements AgentGraph<RoutineGeneratorState, { date: string; approved?: boolean }, any> {
     private metricsCollector: MetricsCollector;
@@ -29,6 +31,7 @@ export class RoutineGeneratorGraph implements AgentGraph<RoutineGeneratorState, 
         const threadId = config?.threadId || randomUUID();
         const maxRetries = config?.maxRetries ?? 3;
         const requiresHumanApproval = config?.requiresHumanApproval ?? false;
+        const timeout = config?.timeout ?? 300000; // Default 5 minutes
         const startTime = Date.now();
 
         let state: RoutineGeneratorState;
@@ -37,7 +40,7 @@ export class RoutineGeneratorGraph implements AgentGraph<RoutineGeneratorState, 
         if (config?.threadId) {
             const checkpoint = await this.checkpointer.load<RoutineGeneratorState>(config.threadId);
             if (!checkpoint) {
-                throw new Error(`Checkpoint not found for threadId: ${config.threadId}`);
+                throw new AppError('Thread de ejecución no encontrado', 404);
             }
             state = checkpoint.state;
             logger.info('Restored state from checkpoint', { threadId, currentNode: state.currentNode });
@@ -46,10 +49,67 @@ export class RoutineGeneratorGraph implements AgentGraph<RoutineGeneratorState, 
             logger.info('Created initial state', { threadId, date: input.date });
         }
 
+        // Create timeout promise
+        const timeoutPromise = new Promise<never>((_, reject) => {
+            setTimeout(() => reject(new Error('Execution timeout exceeded')), timeout);
+        });
+
+        // Create execution promise
+        const executionPromise = this.executeGraph(state, threadId, maxRetries, requiresHumanApproval, startTime, input);
+
+        try {
+            // Race execution against timeout
+            return await Promise.race([executionPromise, timeoutPromise]);
+        } catch (error) {
+            if (error instanceof Error && error.message === 'Execution timeout exceeded') {
+                // Handle timeout
+                state.status = 'failed';
+                state.error = 'Tiempo de ejecución excedido';
+                await this.checkpointer.save(threadId, state, state.currentNode, 'routine_generator');
+                logger.error('Execution timeout exceeded', { threadId, timeout });
+
+                // Record metrics asynchronously
+                const durationMs = Date.now() - startTime;
+                this.recordMetricsAsync(threadId, 'failed', durationMs, state.retryCount, input, null, state.error);
+
+                return {
+                    success: false,
+                    state,
+                    threadId,
+                    status: 'failed',
+                    error: state.error
+                };
+            }
+            throw error;
+        }
+    }
+
+    private async executeGraph(
+        state: RoutineGeneratorState,
+        threadId: string,
+        maxRetries: number,
+        requiresHumanApproval: boolean,
+        startTime: number,
+        input: { date: string }
+    ): Promise<GraphExecutionResult<RoutineGeneratorState>> {
+        logger.info('Execution started', { 
+            threadId, 
+            agentType: 'routine_generator',
+            date: input.date,
+            timestamp: new Date().toISOString()
+        });
+
         try {
             // Execute graph nodes based on currentNode
             while (state.status === 'running') {
                 const previousNode = state.currentNode;
+                const nodeStartTime = Date.now();
+
+                logger.info('Node execution started', { 
+                    threadId, 
+                    node: state.currentNode,
+                    timestamp: new Date().toISOString()
+                });
 
                 switch (state.currentNode) {
                     case 'start':
@@ -74,6 +134,13 @@ export class RoutineGeneratorGraph implements AgentGraph<RoutineGeneratorState, 
                         break;
 
                     case 'awaitingApproval':
+                        const nodeDuration = Date.now() - nodeStartTime;
+                        logger.info('Node execution completed', { 
+                            threadId, 
+                            node: state.currentNode,
+                            durationMs: nodeDuration,
+                            timestamp: new Date().toISOString()
+                        });
                         return {
                             success: true,
                             state,
@@ -92,6 +159,15 @@ export class RoutineGeneratorGraph implements AgentGraph<RoutineGeneratorState, 
                     default:
                         throw new Error(`Unknown node: ${state.currentNode}`);
                 }
+
+                const nodeDuration = Date.now() - nodeStartTime;
+                logger.info('Node execution completed', { 
+                    threadId, 
+                    node: previousNode,
+                    nextNode: state.currentNode,
+                    durationMs: nodeDuration,
+                    timestamp: new Date().toISOString()
+                });
 
                 // Save checkpoint after each node transition
                 if (previousNode !== state.currentNode) {
@@ -118,16 +194,34 @@ export class RoutineGeneratorGraph implements AgentGraph<RoutineGeneratorState, 
                 error: state.error
             };
 
-            // Record metrics asynchronously (fire-and-forget)
-            const durationMs = Date.now() - startTime;
-            this.recordMetricsAsync(threadId, state.status, durationMs, state.retryCount, input, state.formattedRoutine);
+            const totalDuration = Date.now() - startTime;
+            logger.info('Execution completed', { 
+                threadId, 
+                agentType: 'routine_generator',
+                status: state.status,
+                totalDurationMs: totalDuration,
+                timestamp: new Date().toISOString()
+            });
+
+            // Record metrics asynchronously (fire-and-forget) only for terminal states
+            if (state.status === 'completed' || state.status === 'failed') {
+                const durationMs = Date.now() - startTime;
+                this.recordMetricsAsync(threadId, state.status, durationMs, state.retryCount, input, state.formattedRoutine);
+            }
 
             return result;
         } catch (error) {
+            const totalDuration = Date.now() - startTime;
             state.status = 'failed';
             state.error = error instanceof Error ? error.message : 'Unknown error';
             await this.checkpointer.save(threadId, state, state.currentNode, 'routine_generator');
-            logger.error('Execution failed', { threadId, error: state.error });
+            logger.error('Execution failed', { 
+                threadId, 
+                agentType: 'routine_generator',
+                error: state.error,
+                totalDurationMs: totalDuration,
+                timestamp: new Date().toISOString()
+            });
 
             // Record metrics asynchronously (fire-and-forget)
             const durationMs = Date.now() - startTime;
@@ -150,7 +244,7 @@ export class RoutineGeneratorGraph implements AgentGraph<RoutineGeneratorState, 
         const checkpoint = await this.checkpointer.load<RoutineGeneratorState>(threadId);
         
         if (!checkpoint) {
-            throw new Error(`Checkpoint not found for threadId: ${threadId}`);
+            throw new AppError('Thread de ejecución no encontrado', 404);
         }
 
         const state = checkpoint.state;
@@ -181,7 +275,7 @@ export class RoutineGeneratorGraph implements AgentGraph<RoutineGeneratorState, 
         const checkpoint = await this.checkpointer.load<RoutineGeneratorState>(threadId);
         
         if (!checkpoint) {
-            throw new Error(`Checkpoint not found for threadId: ${threadId}`);
+            throw new AppError('Thread de ejecución no encontrado', 404);
         }
 
         return {
@@ -194,7 +288,7 @@ export class RoutineGeneratorGraph implements AgentGraph<RoutineGeneratorState, 
         const checkpoint = await this.checkpointer.load<RoutineGeneratorState>(threadId);
         
         if (!checkpoint) {
-            throw new Error(`Checkpoint not found for threadId: ${threadId}`);
+            throw new AppError('Thread de ejecución no encontrado', 404);
         }
 
         checkpoint.state.status = 'failed';
@@ -216,40 +310,54 @@ export class RoutineGeneratorGraph implements AgentGraph<RoutineGeneratorState, 
 
         logger.info('Fetching daily summary for yesterday', { threadId: state.threadId, yesterday: yesterdayStr });
 
-        const summary = await this.repositories.get(DailySummaryRepository).findByDate(yesterdayStr);
+        try {
+            const summary = await this.repositories.get(DailySummaryRepository).findByDate(yesterdayStr);
 
-        if (summary) {
-            state.yesterdayContext = `Resumen del día anterior (${yesterdayStr}):
+            if (summary) {
+                state.yesterdayContext = `Resumen del día anterior (${yesterdayStr}):
 ${summary.summary}
 
 Nivel de riesgo: ${summary.riskLevel}/10
 Puntos clave: ${summary.keyInsights.join(', ')}`;
 
-            state.analysisResult = {
-                riskLevel: summary.riskLevel,
-                recommendations: summary.keyInsights.map(insight => `Considerar: ${insight}`)
-            };
+                state.analysisResult = {
+                    riskLevel: summary.riskLevel,
+                    recommendations: summary.keyInsights.map(insight => `Considerar: ${insight}`)
+                };
 
-            logger.info('Analysis result from yesterday summary', { 
-                threadId: state.threadId, 
-                riskLevel: summary.riskLevel,
-                recommendationsCount: state.analysisResult.recommendations.length
+                logger.info('Analysis result from yesterday summary', { 
+                    threadId: state.threadId, 
+                    riskLevel: summary.riskLevel,
+                    recommendationsCount: state.analysisResult.recommendations.length
+                });
+            } else {
+                state.yesterdayContext = 'No hay datos previos.';
+                state.analysisResult = {
+                    riskLevel: 5,
+                    recommendations: ['Establecer rutina básica de bienestar']
+                };
+
+                logger.info('No previous summary found, using defaults', { threadId: state.threadId });
+            }
+
+            return {
+                ...state,
+                currentNode: 'scheduler',
+                updatedAt: new Date()
+            };
+        } catch (error) {
+            const errorMessage = error instanceof Error ? error.message : 'Unknown database error';
+            logger.error('Database error while fetching daily summary', {
+                threadId: state.threadId,
+                yesterday: yesterdayStr,
+                error: errorMessage
             });
-        } else {
-            state.yesterdayContext = 'No hay datos previos.';
-            state.analysisResult = {
-                riskLevel: 5,
-                recommendations: ['Establecer rutina básica de bienestar']
-            };
-
-            logger.info('No previous summary found, using defaults', { threadId: state.threadId });
+            
+            throw new AppError(
+                'Database temporarily unavailable - failed to fetch daily summary',
+                500
+            );
         }
-
-        return {
-            ...state,
-            currentNode: 'scheduler',
-            updatedAt: new Date()
-        };
     }
 
     private async schedulerNode(state: RoutineGeneratorState, maxRetries: number): Promise<RoutineGeneratorState> {
@@ -259,16 +367,20 @@ Puntos clave: ${summary.keyInsights.join(', ')}`;
             throw new Error('Cannot schedule without analysis result');
         }
 
+        // Sanitize context and recommendations before sending to LLM
+        const sanitizedContext = sanitizeInput(state.yesterdayContext);
+        const sanitizedRecommendations = state.analysisResult.recommendations.map(r => sanitizeInput(r));
+
         const prompt = `
 Actúa como un "Generador de Rutinas" para la recuperación y salud emocional.
 
 Fecha objetivo: ${state.date}
 Contexto del día anterior:
-${state.yesterdayContext}
+${sanitizedContext}
 
 Nivel de riesgo: ${state.analysisResult.riskLevel}/10
 Recomendaciones:
-${state.analysisResult.recommendations.map((r, i) => `${i + 1}. ${r}`).join('\n')}
+${sanitizedRecommendations.map((r, i) => `${i + 1}. ${r}`).join('\n')}
 
 Genera una rutina diaria en formato JSON con las siguientes características:
 1. Debe incluir actividades que promuevan el bienestar y la recuperación
@@ -300,6 +412,11 @@ Devuelve SOLO el JSON, sin texto adicional.
             const schedule = JsonParser.parseSafe(response, null);
 
             if (!schedule) {
+                logger.warn('JSON parsing failed', { 
+                    threadId: state.threadId, 
+                    rawResponse: response,
+                    retryCount: state.retryCount
+                });
                 throw new Error('Failed to parse LLM response as JSON');
             }
 
@@ -315,24 +432,34 @@ Devuelve SOLO el JSON, sin texto adicional.
         } catch (error) {
             const newRetryCount = state.retryCount + 1;
             
-            logger.warn('Scheduler failed, retrying', { 
-                threadId: state.threadId, 
-                retryCount: newRetryCount,
-                error: error instanceof Error ? error.message : 'Unknown error'
-            });
-
             if (newRetryCount >= maxRetries) {
-                logger.error('Max retries exceeded in scheduler', { threadId: state.threadId });
+                const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+                logger.error('Ejecución fallida después de alcanzar el máximo de reintentos', { 
+                    threadId: state.threadId,
+                    maxRetries,
+                    error: errorMessage
+                });
                 return {
                     ...state,
                     status: 'failed',
-                    error: `Scheduler failed after ${maxRetries} retries: ${error instanceof Error ? error.message : 'Unknown error'}`,
+                    error: `Scheduler failed after ${maxRetries} retries: ${errorMessage}`,
                     retryCount: newRetryCount,
                     updatedAt: new Date()
                 };
             }
 
-            const backoffMs = Math.pow(2, newRetryCount) * 1000;
+            // Exponential backoff with jitter, capped at 10 seconds
+            const baseBackoffMs = Math.pow(2, newRetryCount) * 1000;
+            const jitterMs = Math.random() * 1000;
+            const backoffMs = Math.min(10000, baseBackoffMs + jitterMs);
+            
+            logger.warn('Scheduler falló, reintentando con backoff exponencial', { 
+                threadId: state.threadId, 
+                retryCount: newRetryCount,
+                backoffMs: Math.round(backoffMs),
+                error: error instanceof Error ? error.message : 'Unknown error'
+            });
+
             await new Promise(resolve => setTimeout(resolve, backoffMs));
 
             return {
@@ -550,17 +677,16 @@ Devuelve SOLO el JSON, sin texto adicional.
                 updatedAt: new Date()
             };
         } catch (error) {
-            logger.error('Failed to save routine', { 
+            const errorMessage = error instanceof Error ? error.message : 'Unknown database error';
+            logger.error('Database error while saving routine', { 
                 threadId: state.threadId, 
-                error: error instanceof Error ? error.message : 'Unknown error' 
+                error: errorMessage
             });
             
-            return {
-                ...state,
-                status: 'failed',
-                error: `Failed to save routine: ${error instanceof Error ? error.message : 'Unknown error'}`,
-                updatedAt: new Date()
-            };
+            throw new AppError(
+                'Database temporarily unavailable - failed to save routine',
+                500
+            );
         }
     }
 

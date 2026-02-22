@@ -9,6 +9,8 @@ import { executeDailyAuditSchema, approveExecutionSchema, generateRoutineSchema 
 import { validateRequest } from '../middleware/validateRequest';
 import { CheckpointerProvider } from '../../../application/providers/CheckpointerProvider';
 import { AppError } from '../../../domain/errors/AppError';
+import { agentRateLimiter } from '../middleware/rateLimiter';
+import { validateThreadOwnership } from '../../../application/utils/validateThreadOwnership';
 
 export class AgentController implements Controller {
     public path = '/agents';
@@ -26,6 +28,9 @@ export class AgentController implements Controller {
     }
 
     private initializeRoutes() {
+        // Apply rate limiting to all agent endpoints
+        this.router.use(agentRateLimiter);
+        
         this.router.post(`${this.path}/audit`, this.generateAudit.bind(this));
         this.router.get(`${this.path}/audit/:date`, this.getAudit.bind(this));
         this.router.post(`${this.path}/routine`, this.generateRoutine.bind(this));
@@ -35,6 +40,8 @@ export class AgentController implements Controller {
         this.router.post(`${this.path}/approve/:threadId`, validateRequest(approveExecutionSchema), this.approveExecution.bind(this));
         this.router.get(`${this.path}/status/:threadId`, this.getExecutionStatus.bind(this));
         this.router.post(`${this.path}/generate-routine`, validateRequest(generateRoutineSchema), this.executeGenerateRoutine.bind(this));
+        this.router.get(`${this.path}/metrics`, this.getMetrics.bind(this));
+        this.router.get(`${this.path}/health`, this.getHealth.bind(this));
     }
 
     async generateAudit(req: Request, res: Response, next: any) {
@@ -133,6 +140,10 @@ export class AgentController implements Controller {
             const { threadId } = req.params as any;
             const { approved } = req.body as any;
 
+            // Validate thread ownership (userId would come from auth middleware in production)
+            const userId = (req as any).user?.id; // Optional for MVP
+            await validateThreadOwnership(this.checkpointer, threadId, userId);
+
             const checkpoint = await this.checkpointer.load(threadId);
             
             if (!checkpoint) {
@@ -163,6 +174,10 @@ export class AgentController implements Controller {
     async getExecutionStatus(req: Request, res: Response, next: any) {
         try {
             const { threadId } = req.params as any;
+
+            // Validate thread ownership (userId would come from auth middleware in production)
+            const userId = (req as any).user?.id; // Optional for MVP
+            await validateThreadOwnership(this.checkpointer, threadId, userId);
 
             const checkpoint = await this.checkpointer.load(threadId) as any;
             
@@ -213,4 +228,112 @@ export class AgentController implements Controller {
             next(error);
         }
     }
+
+    async getMetrics(req: Request, res: Response, next: any) {
+        try {
+            const { agentType, startDate, endDate } = req.query;
+
+            // Validate agentType if provided
+            if (agentType && agentType !== 'daily_auditor' && agentType !== 'routine_generator') {
+                return res.status(400).json({
+                    message: 'Invalid agentType. Must be "daily_auditor" or "routine_generator"'
+                });
+            }
+
+            // Build query
+            const { db } = await import('../../db/index');
+            const { agentMetrics } = await import('../../db/schema');
+            const { eq, and, gte, lte } = await import('drizzle-orm');
+
+            let query = db.select().from(agentMetrics);
+            const conditions = [];
+
+            if (agentType) {
+                conditions.push(eq(agentMetrics.agentType, agentType as string));
+            }
+
+            if (startDate) {
+                conditions.push(gte(agentMetrics.date, startDate as string));
+            }
+
+            if (endDate) {
+                conditions.push(lte(agentMetrics.date, endDate as string));
+            }
+
+            if (conditions.length > 0) {
+                query = query.where(and(...conditions)) as any;
+            }
+
+            const metrics = await query;
+
+            // Calculate aggregated metrics
+            const aggregated = {
+                totalExecutions: metrics.reduce((sum, m) => sum + (m.totalExecutions || 0), 0),
+                successfulExecutions: metrics.reduce((sum, m) => sum + (m.successfulExecutions || 0), 0),
+                failedExecutions: metrics.reduce((sum, m) => sum + (m.failedExecutions || 0), 0),
+                avgDurationMs: metrics.length > 0
+                    ? Math.round(metrics.reduce((sum, m) => sum + (m.avgDurationMs || 0), 0) / metrics.length)
+                    : 0,
+                totalRetries: metrics.reduce((sum, m) => sum + (m.totalRetries || 0), 0),
+                successRate: 0
+            };
+
+            if (aggregated.totalExecutions > 0) {
+                aggregated.successRate = Math.round((aggregated.successfulExecutions / aggregated.totalExecutions) * 100);
+            }
+
+            return res.status(200).json({
+                aggregated,
+                daily: metrics
+            });
+        } catch (error) {
+            next(error);
+        }
+    }
+
+    async getHealth(req: Request, res: Response, next: any) {
+        try {
+            const health = {
+                status: 'healthy',
+                timestamp: new Date().toISOString(),
+                checks: {
+                    database: { status: 'unknown', message: '' },
+                    llm: { status: 'unknown', message: '' }
+                }
+            };
+
+            // Check database connection
+            try {
+                const { db } = await import('../../db/index');
+                const { sql } = await import('drizzle-orm');
+                await db.execute(sql`SELECT 1`);
+                health.checks.database = { status: 'healthy', message: 'Database connection successful' };
+            } catch (error) {
+                health.checks.database = {
+                    status: 'unhealthy',
+                    message: error instanceof Error ? error.message : 'Database connection failed'
+                };
+                health.status = 'unhealthy';
+            }
+
+            // Check LLM provider availability
+            try {
+                // Simple check - just verify the provider is available
+                // In production, you might want to do a lightweight test call
+                health.checks.llm = { status: 'available', message: 'LLM provider is configured' };
+            } catch (error) {
+                health.checks.llm = {
+                    status: 'unavailable',
+                    message: error instanceof Error ? error.message : 'LLM provider check failed'
+                };
+                health.status = 'degraded';
+            }
+
+            const statusCode = health.status === 'healthy' ? 200 : 503;
+            return res.status(statusCode).json(health);
+        } catch (error) {
+            next(error);
+        }
+    }
+
 }

@@ -61,6 +61,7 @@ export const relationships = pgTable("relationships", {
 export const agentCheckpoints = pgTable("agent_checkpoints", {
     id: uuid("id").primaryKey().defaultRandom(),
     threadId: text("thread_id").notNull(),
+    userId: text("user_id"), // Optional for MVP - will be required when auth is implemented
     state: jsonb("state").notNull(),
     nodeId: text("node_id").notNull(),
     agentType: text("agent_type").notNull(),
