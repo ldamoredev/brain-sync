@@ -7,3 +7,11 @@ apps/api/node_modules
 .turbo
 whisper-cache
 apps/api/dist
+
+# macOS system files
+.DS_Store
+**/.DS_Store
+**/.DS_ST
+apps/.DS_Store
+apps/api/src/.DS_Store
+apps/api/src/application/.DS_Store
