@@ -15,3 +15,7 @@ export const executeDailyAuditSchema = z.object({
 export const approveExecutionSchema = z.object({
   approved: z.boolean(),
 });
+
+export const generateRoutineSchema = z.object({
+  date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Date must be in ISO format (YYYY-MM-DD)'),
+});

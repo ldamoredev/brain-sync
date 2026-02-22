@@ -5,7 +5,7 @@ import { db } from '../db/index';
 import { agentCheckpoints } from '../db/schema';
 
 export class PostgreSQLCheckpointer implements CheckpointerProvider {
-    async save<T>(threadId: string, state: T, nodeId: string): Promise<string> {
+    async save<T>(threadId: string, state: T, nodeId: string, agentType: string = 'unknown'): Promise<string> {
         const checkpointId = randomUUID();
         
         await db.insert(agentCheckpoints).values({
@@ -13,7 +13,7 @@ export class PostgreSQLCheckpointer implements CheckpointerProvider {
             threadId,
             state: state as any,
             nodeId,
-            agentType: 'unknown',
+            agentType,
         });
 
         return checkpointId;
@@ -52,6 +52,7 @@ export class PostgreSQLCheckpointer implements CheckpointerProvider {
             threadId: row.threadId,
             state: row.state as T,
             nodeId: row.nodeId,
+            agentType: row.agentType,
             createdAt: row.createdAt,
         };
     }
@@ -68,6 +69,7 @@ export class PostgreSQLCheckpointer implements CheckpointerProvider {
             threadId: row.threadId,
             state: row.state,
             nodeId: row.nodeId,
+            agentType: row.agentType,
             createdAt: row.createdAt,
         }));
     }

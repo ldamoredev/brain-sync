@@ -54,7 +54,9 @@ export class App {
             this.core.getUseCase(GenerateDailyAudit),
             this.core.getUseCase(GenerateRoutine),
             this.core.getUseCase(GetAgentData),
-            this.core.dailyAuditorGraph
+            this.core.dailyAuditorGraph,
+            this.core.routineGeneratorGraph,
+            this.core.checkpointer
         );
         const controllers = [
             chatController,

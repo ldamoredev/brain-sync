@@ -178,7 +178,7 @@ This plan transforms the existing Daily Auditor and Routine Generator agents fro
     - Add to controllers array in `apps/api/src/infrastructure/Core.ts`
     - _Requirements: Design Section "Basic Integration"_
   
-  - [ ] 7.5 Write integration test for Daily Auditor complete flow
+  - [x] 7.5 Write integration test for Daily Auditor complete flow
     - Start execution with valid date
     - Verify notes fetched from database
     - Verify LLM called with correct context
@@ -189,14 +189,14 @@ This plan transforms the existing Daily Auditor and Routine Generator agents fro
 
 ### Week 2: Advanced Patterns
 
-- [ ] 8. Implement Routine Generator Graph
-  - [ ] 8.1 Create RoutineGeneratorState interface
+- [-] 8. Implement Routine Generator Graph
+  - [x] 8.1 Create RoutineGeneratorState interface
     - Extend BaseAgentState with Routine Generator specific fields
     - Add fields: date, yesterdayContext, analysisResult, rawSchedule, validatedSchedule, formattedRoutine, validationAttempts, requiresApproval, approved
     - Create in `apps/api/src/application/agents/types.ts`
     - _Requirements: Design Section "LangGraph State Interfaces - Routine Generator State"_
   
-  - [ ] 8.2 Implement Analyzer node
+  - [x] 8.2 Implement Analyzer node
     - Calculate yesterday's date from input date
     - Fetch daily summary for yesterday from repository
     - Format context and extract recommendations
@@ -205,7 +205,7 @@ This plan transforms the existing Daily Auditor and Routine Generator agents fro
     - Set currentNode to "scheduler"
     - _Requirements: Design Section "Routine Generator Multi-Agent Graph Algorithm - Node 1"_
   
-  - [ ] 8.3 Implement Scheduler node with retry logic
+  - [x] 8.3 Implement Scheduler node with retry logic
     - Build scheduler prompt with date and analysisResult
     - Call LLM provider to generate schedule
     - Parse JSON response into rawSchedule
@@ -213,7 +213,7 @@ This plan transforms the existing Daily Auditor and Routine Generator agents fro
     - Update state with rawSchedule and set currentNode to "validator"
     - _Requirements: Design Section "Routine Generator Multi-Agent Graph Algorithm - Node 2"_
   
-  - [ ] 8.4 Implement schedule validation logic
+  - [x] 8.4 Implement schedule validation logic
     - Create validateSchedule() function
     - Check for required "activities" array
     - Validate each activity has time, activity, expectedBenefit fields
@@ -223,7 +223,7 @@ This plan transforms the existing Daily Auditor and Routine Generator agents fro
     - Return validation result with feedback
     - _Requirements: Design Section "Schedule Validation Algorithm"_
   
-  - [ ] 8.5 Implement Validator node with feedback loop
+  - [x] 8.5 Implement Validator node with feedback loop
     - Call validateSchedule() on rawSchedule
     - Increment validationAttempts
     - If valid: set validatedSchedule and currentNode to "formatter"
@@ -231,23 +231,23 @@ This plan transforms the existing Daily Auditor and Routine Generator agents fro
     - If invalid and attempts >= 3: set status to "failed" with error
     - _Requirements: Design Section "Routine Generator Multi-Agent Graph Algorithm - Node 3"_
   
-  - [ ] 8.6 Implement Formatter node
+  - [x] 8.6 Implement Formatter node
     - Normalize activities from validatedSchedule
     - Create formattedRoutine with activities array
     - Set currentNode to "checkApproval"
     - _Requirements: Design Section "Routine Generator Multi-Agent Graph Algorithm - Node 4"_
   
-  - [ ] 8.7 Implement checkApproval and saveRoutine nodes
+  - [x] 8.7 Implement checkApproval and saveRoutine nodes
     - checkApproval: pause if requiresHumanApproval is true
     - saveRoutine: persist routine to database, set status to "completed"
     - _Requirements: Design Section "Routine Generator Multi-Agent Graph Algorithm - Nodes 5-7"_
   
-  - [ ] 8.8 Wire RoutineGeneratorGraph execute() and resume() methods
+  - [x] 8.8 Wire RoutineGeneratorGraph execute() and resume() methods
     - Implement execute() with node sequencing and checkpoint saves
     - Implement resume() for approval workflow
     - _Requirements: Design Section "RoutineGeneratorGraph.execute()"_
   
-  - [ ]* 8.9 Write unit tests for Routine Generator nodes
+  - [x] xd Write unit tests for Routine Generator nodes
     - Test Analyzer fetches and formats yesterday's context
     - Test Scheduler generates schedule with required fields
     - Test Validator detects missing fields
@@ -257,16 +257,16 @@ This plan transforms the existing Daily Auditor and Routine Generator agents fro
     - Test Formatter normalizes activities
     - _Requirements: Design Section "Unit Testing Approach - Node Function Tests"_
   
-  - [ ]* 8.10 Write property test for validation feedback loop
+  - [x] 8.10 Write property test for validation feedback loop
     - **Property 6: Validation Feedback Loop**
     - **Validates: Design Property "Validation Feedback Loop"**
     - Verify recommendations grow with each validation retry
 
-- [ ] 9. Checkpoint - Verify Routine Generator Graph implementation
+- [x] 9. Checkpoint - Verify Routine Generator Graph implementation
   - Ensure all tests pass, ask the user if questions arise.
 
-- [ ] 10. Implement human-in-the-loop approval workflow
-  - [ ] 10.1 Implement POST /agents/approve/:threadId endpoint
+- [x] 10. Implement human-in-the-loop approval workflow
+  - [x] 10.1 Implement POST /agents/approve/:threadId endpoint
     - Accept threadId as URL parameter
     - Accept approved boolean in request body
     - Validate request with Zod schema
@@ -276,14 +276,14 @@ This plan transforms the existing Daily Auditor and Routine Generator agents fro
     - Return 404 if threadId not found
     - _Requirements: Design Section "Controller Integration - approveExecution"_
   
-  - [ ] 10.2 Implement GET /agents/status/:threadId endpoint
+  - [x] 10.2 Implement GET /agents/status/:threadId endpoint
     - Accept threadId as URL parameter
     - Load checkpoint from database
     - Return current status, currentNode, and relevant state fields
     - Return 404 if threadId not found
     - _Requirements: Design Section "Checking Execution Status"_
   
-  - [ ] 10.3 Implement POST /agents/generate-routine endpoint
+  - [x] 10.3 Implement POST /agents/generate-routine endpoint
     - Accept date in request body
     - Validate request with Zod schema
     - Call routineGraph.execute()

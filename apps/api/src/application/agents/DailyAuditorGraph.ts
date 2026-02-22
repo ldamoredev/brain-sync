@@ -83,7 +83,7 @@ export class DailyAuditorGraph implements AgentGraph<DailyAuditorState, { date: 
 
                 // Save checkpoint after each node transition
                 if (previousNode !== state.currentNode) {
-                    await this.checkpointer.save(threadId, state, state.currentNode);
+                    await this.checkpointer.save(threadId, state, state.currentNode, 'daily_auditor');
                     logger.info('Checkpoint saved', { threadId, node: state.currentNode });
                 }
 
@@ -108,7 +108,7 @@ export class DailyAuditorGraph implements AgentGraph<DailyAuditorState, { date: 
         } catch (error) {
             state.status = 'failed';
             state.error = error instanceof Error ? error.message : 'Unknown error';
-            await this.checkpointer.save(threadId, state, state.currentNode);
+            await this.checkpointer.save(threadId, state, state.currentNode, 'daily_auditor');
             logger.error('Execution failed', { threadId, error: state.error });
 
             return {
@@ -181,7 +181,7 @@ export class DailyAuditorGraph implements AgentGraph<DailyAuditorState, { date: 
         checkpoint.state.status = 'failed';
         checkpoint.state.error = 'Execution cancelled by user';
         
-        await this.checkpointer.save(threadId, checkpoint.state, checkpoint.state.currentNode);
+        await this.checkpointer.save(threadId, checkpoint.state, checkpoint.state.currentNode, 'daily_auditor');
         logger.info('Execution cancelled', { threadId });
     }
 

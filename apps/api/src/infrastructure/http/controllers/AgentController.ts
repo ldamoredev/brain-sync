@@ -4,8 +4,11 @@ import { GenerateDailyAudit } from '../../../application/useCases/GenerateDailyA
 import { GetAgentData } from '../../../application/useCases/GetAgentData';
 import { GenerateRoutine } from '../../../application/useCases/GenerateRoutine';
 import { DailyAuditorGraph } from '../../../application/agents/DailyAuditorGraph';
-import { executeDailyAuditSchema, approveExecutionSchema } from '@brain-sync/types';
+import { RoutineGeneratorGraph } from '../../../application/agents/RoutineGeneratorGraph';
+import { executeDailyAuditSchema, approveExecutionSchema, generateRoutineSchema } from '@brain-sync/types';
 import { validateRequest } from '../middleware/validateRequest';
+import { CheckpointerProvider } from '../../../application/providers/CheckpointerProvider';
+import { AppError } from '../../../domain/errors/AppError';
 
 export class AgentController implements Controller {
     public path = '/agents';
@@ -15,7 +18,9 @@ export class AgentController implements Controller {
         private generateDailyAudit: GenerateDailyAudit,
         private generateRoutineUseCase: GenerateRoutine,
         private getAgentDataService: GetAgentData,
-        private dailyAuditorGraph: DailyAuditorGraph
+        private dailyAuditorGraph: DailyAuditorGraph,
+        private routineGeneratorGraph: RoutineGeneratorGraph,
+        private checkpointer: CheckpointerProvider
     ) {
         this.initializeRoutes();
     }
@@ -27,6 +32,9 @@ export class AgentController implements Controller {
         this.router.get(`${this.path}/routine/:date`, this.getRoutine.bind(this));
         this.router.put(`${this.path}/routine/:date`, this.updateRoutine.bind(this));
         this.router.post(`${this.path}/daily-audit`, validateRequest(executeDailyAuditSchema), this.executeDailyAudit.bind(this));
+        this.router.post(`${this.path}/approve/:threadId`, validateRequest(approveExecutionSchema), this.approveExecution.bind(this));
+        this.router.get(`${this.path}/status/:threadId`, this.getExecutionStatus.bind(this));
+        this.router.post(`${this.path}/generate-routine`, validateRequest(generateRoutineSchema), this.executeGenerateRoutine.bind(this));
     }
 
     async generateAudit(req: Request, res: Response, next: any) {
@@ -111,6 +119,92 @@ export class AgentController implements Controller {
             } else {
                 return res.status(500).json({
                     message: 'Error al ejecutar la auditoría',
+                    error: result.error,
+                    status: 'failed'
+                });
+            }
+        } catch (error) {
+            next(error);
+        }
+    }
+
+    async approveExecution(req: Request, res: Response, next: any) {
+        try {
+            const { threadId } = req.params;
+            const { approved } = req.body;
+
+            const checkpoint = await this.checkpointer.load(threadId);
+            
+            if (!checkpoint) {
+                throw new AppError('Thread no encontrado', 404);
+            }
+
+            const agentType = checkpoint.agentType;
+            let result;
+
+            if (agentType === 'daily_auditor') {
+                result = await this.dailyAuditorGraph.resume(threadId, { approved });
+            } else if (agentType === 'routine_generator') {
+                result = await this.routineGeneratorGraph.resume(threadId, { approved });
+            } else {
+                throw new AppError('Tipo de agente desconocido', 400);
+            }
+
+            return res.status(200).json({
+                message: approved ? 'Ejecución aprobada y completada' : 'Ejecución rechazada',
+                status: result.status,
+                threadId: result.threadId
+            });
+        } catch (error) {
+            next(error);
+        }
+    }
+
+    async getExecutionStatus(req: Request, res: Response, next: any) {
+        try {
+            const { threadId } = req.params;
+
+            const checkpoint = await this.checkpointer.load(threadId);
+            
+            if (!checkpoint) {
+                throw new AppError('Thread no encontrado', 404);
+            }
+
+            return res.status(200).json({
+                status: checkpoint.state.status,
+                currentNode: checkpoint.nodeId,
+                state: checkpoint.state
+            });
+        } catch (error) {
+            next(error);
+        }
+    }
+
+    async executeGenerateRoutine(req: Request, res: Response, next: any) {
+        try {
+            const { date } = req.body;
+
+            const result = await this.routineGeneratorGraph.execute(
+                { date },
+                { requiresHumanApproval: true }
+            );
+
+            if (result.status === 'paused') {
+                return res.status(202).json({
+                    message: 'Rutina generada, esperando aprobación',
+                    threadId: result.threadId,
+                    routine: result.state.formattedRoutine,
+                    status: 'paused'
+                });
+            } else if (result.status === 'completed') {
+                return res.status(200).json({
+                    message: 'Rutina generada y guardada',
+                    routine: result.state.formattedRoutine,
+                    status: 'completed'
+                });
+            } else {
+                return res.status(500).json({
+                    message: 'Error al generar la rutina',
                     error: result.error,
                     status: 'failed'
                 });

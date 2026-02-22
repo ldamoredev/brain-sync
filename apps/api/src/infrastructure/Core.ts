@@ -26,6 +26,7 @@ import { ChatPipeline } from '../application/useCases/chat/ChatPipeline';
 import { PromptBuilder } from '../application/useCases/chat/PromptBuilder';
 import { FaithfulnessGuard } from '../application/useCases/chat/FaithfulnessGuard';
 import { DailyAuditorGraph } from '../application/agents/DailyAuditorGraph';
+import { RoutineGeneratorGraph } from '../application/agents/RoutineGeneratorGraph';
 import { PostgreSQLCheckpointer } from './checkpointer/PostgreSQLCheckpointer';
 
 export class Core {
@@ -34,8 +35,9 @@ export class Core {
     private llmProvider = new OllamaLLMProvider();
     private vectorProvider = new OllamaVectorProvider();
     private transcriptionProvider = new OpenIATranscriptionProvider();
-    private checkpointer = new PostgreSQLCheckpointer();
+    public checkpointer = new PostgreSQLCheckpointer();
     public dailyAuditorGraph: DailyAuditorGraph;
+    public routineGeneratorGraph: RoutineGeneratorGraph;
 
     constructor() {
         this.initializeRepositories();
@@ -82,6 +84,11 @@ export class Core {
 
     private initializeAgents() {
         this.dailyAuditorGraph = new DailyAuditorGraph(
+            this.llmProvider,
+            this.repositories,
+            this.checkpointer
+        );
+        this.routineGeneratorGraph = new RoutineGeneratorGraph(
             this.llmProvider,
             this.repositories,
             this.checkpointer
