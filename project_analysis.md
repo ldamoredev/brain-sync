@@ -7,7 +7,7 @@ The project is managed by `pnpm` and `turbo`, ensuring efficient builds and depe
 
 ## Architecture
 
-The system follows a **Clean Architecture** approach in the backend and a modern **Component-Based Architecture** in the frontend, connected via RESTful APIs and Server-Sent Events (SSE) for real-time streaming.
+The system follows a **Clean Architecture** approach in the backend and a modern **Component-Based Architecture** in the frontend, connected via RESTful APIs.
 
 ### 1. Backend (`apps/api`)
 The backend is the core intelligence of the system. It handles data persistence, vector generation, and LLM orchestration.
@@ -60,17 +60,7 @@ The project relies entirely on local inference, ensuring privacy and offline cap
 *   **LLM Model**: `phi3:mini` (optimized for speed and low resource usage).
 *   **Embedding Model**: `nomic-embed-text` (high-quality text embeddings).
 *   **Speech-to-Text**: **Faster-Whisper** running in a Docker container (port `8000`).
-*   **Orchestration**: **LangChain** (`@langchain/ollama`) is used to interface with Ollama, manage prompts, and handle streaming responses.
-
-#### Streaming with SSE (Server-Sent Events)
-To provide a ChatGPT-like experience, the backend streams the LLM's response token-by-token.
-*   **Protocol**: Server-Sent Events (SSE).
-*   **Endpoint**: `GET /api/chat/stream`.
-*   **Events**:
-    *   `meta`: Sends the retrieved sources (notes used for the answer) before the text starts.
-    *   `token`: Sends a chunk of the generated text.
-    *   `done`: Signals the end of the stream.
-    *   `error`: Handles failures or aborts.
+*   **Orchestration**: **LangChain** (`@langchain/ollama`) is used to interface with Ollama and manage prompts.
 
 ### 2. Frontend (`apps/web`)
 The frontend is a modern React application built with Next.js.
@@ -82,12 +72,21 @@ The frontend is a modern React application built with Next.js.
 
 #### Chat Interface
 *   **State Management**: Uses React `useState` and `useRef` to manage chat history and auto-scrolling.
-*   **Streaming Client**: Uses the native `EventSource` API to consume the backend SSE stream.
-    *   Listens for `token` events to append text in real-time.
-    *   Listens for `meta` events to display "Contexto Recuperado" (citations).
-*   **Proxying**: Next.js API Routes (`app/api/chat/stream/route.ts`) act as a proxy to the Express backend, handling CORS and potentially adding an extra layer of security or transformation.
+*   **API Communication**: Uses standard `fetch` to communicate with the backend REST API.
 
-### 3. Shared Infrastructure
+### 3. MCP Servers (`apps/mcp-servers`)
+This new section of the monorepo houses isolated microservices that implement the Model Context Protocol (MCP). These servers extend Brain-Sync's capabilities by connecting it to real-world applications like Telegram and Google Calendar, allowing the AI to interact proactively with the user's daily life.
+
+*   **Architecture**: Each MCP server is a self-contained microservice, designed to run as a subprocess and communicate with the main API via standard I/O. This ensures a clean separation of concerns and scalability for future integrations.
+*   **Components**:
+    *   **Telegram MCP Server**:
+        *   Acts as a Telegram bot, enabling multimodal input (e.g., voice notes transcribed locally via `faster-whisper-server`).
+        *   Exposes a `send_telegram_alert` tool, allowing agents like the "Daily Auditor" to send proactive notifications for high-risk emotional patterns.
+    *   **Google Calendar MCP Server**:
+        *   Integrates with Google Calendar to read user availability (`calendar://today/freebusy` resource).
+        *   Exposes a `schedule_recovery_block` tool, enabling the "Routine Generator" agent to dynamically insert recovery activities (e.g., meditation, walks) into free slots based on detected triggers.
+
+### 4. Shared Infrastructure
 *   **Monorepo Tools**:
     *   **Turbo**: Orchestrates tasks (build, dev, lint) across packages.
     *   **PNPM**: Efficient package manager with workspace support.
@@ -98,9 +97,9 @@ The frontend is a modern React application built with Next.js.
 ## Key Features & Flows
 
 1.  **Ask with Context**:
-    *   User types a question -> Frontend sends to Next.js Proxy -> Proxy forwards to Express Backend.
+    *   User types a question -> Frontend sends a request to the Express Backend.
     *   Backend embeds question -> Finds relevant notes -> Calls Ollama with context.
-    *   Ollama streams response -> Backend forwards chunks via SSE -> Frontend renders text live.
+    *   Ollama generates a response -> Backend sends the full response to the frontend -> Frontend renders the response.
 
 2.  **Privacy First**:
     *   All data stays local.
@@ -108,6 +107,11 @@ The frontend is a modern React application built with Next.js.
 
 3.  **Modular AI**:
     *   The `LLMProvider` and `VectorProvider` interfaces allow for easy swapping of models (e.g., upgrading to Llama 3 or Mistral) without changing the core logic.
+
+4.  **Proactive & Context-Aware Intervention (via MCP)**:
+    *   Agents (e.g., Daily Auditor, Routine Generator) can leverage MCP tools to interact with external services.
+    *   Example: Daily Auditor detects high-risk -> calls `send_telegram_alert` via MCP -> user receives a proactive message.
+    *   Example: Routine Generator detects a trigger -> checks `calendar://today/freebusy` -> calls `schedule_recovery_block` via MCP -> a meditation session is added to the user's calendar.
 
 ## Data Flow: Note Ingestion & Retrieval
 
@@ -143,37 +147,4 @@ When a user asks a question, the system performs a hybrid search:
 4.  **Context Construction**:
     *   The content of the notes + the graph relationships are concatenated to form the final context.
     *   This rich context is passed to the LLM to generate a comprehensive answer.
-
-## Project Status & Next Steps
-
-The project has reached a "feature complete" state for its initial scope. The core user journey is fully implemented, and the underlying infrastructure has been hardened for stability and scalability.
-
-### Recent Improvements
-*   **Note Management**: Full CRUD functionality for notes (Create, Read, List).
-*   **Production Hardening**:
-    *   **Environment Variables**: Replaced hardcoded values with `.env` files.
-    *   **Security**: Added `helmet`, rate limiting, and security headers.
-    *   **Error Handling**: Implemented global error handling and validation middleware.
-*   **Developer Experience**:
-    *   **Dockerization**: The entire stack (Postgres, Ollama, API, Web, Faster-Whisper) is containerized with Docker Compose for one-command setup.
-    *   **Logging**: Integrated `winston` for structured backend logging.
-    *   **Testing**: Set up `vitest` and wrote initial unit tests for core services.
-*   **Phase 1 & 2 (Behavioral Intelligence)**:
-    *   Implemented structured entity extraction (Emotions, Triggers).
-    *   Implemented "Daily Auditor" and "Routine Generator" agents.
-*   **Phase 3 (Multimodality)**:
-    *   Implemented Voice Journaling using local Faster-Whisper.
-*   **Phase 4 (GraphRAG)**:
-    *   Implemented Graph-Relational schema and logic to extract and query relationships between entities.
-*   **Phase 5 (Evaluation & Observability)**:
-    *   Implemented `EvaluationService` for faithfulness checks and hallucination correction.
-    *   Developed a benchmarking suite with RAGas metrics support.
-    *   Implemented robust JSON repair for resilient LLM integration.
-
-### Future Roadmap
-While the current version is a robust MVP, several avenues exist for future development:
-*   **Image Analysis**: Complete Phase 3 by integrating Llava for image understanding.
-*   **User Authentication**: Implement user accounts to support multiple users in a deployed environment.
-*   **Advanced Note Management**: Add features like note editing, deletion, and tagging/organization.
-*   **Scalable Vector Search**: For larger datasets, migrate from `pgvector` to a dedicated vector database like Weaviate or Pinecone.
-*   **CI/CD Pipeline**: Set up a GitHub Actions workflow to automate testing and deployment.
+ext Protocol to enable proactive interactions with external services like Telegram and Google Calendar, allowing the AI to read user availability and schedule recovery activities. This involves creating isolated microservices within `apps/mcp-servers` for each integration.

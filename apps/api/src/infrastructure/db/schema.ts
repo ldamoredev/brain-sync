@@ -1,4 +1,4 @@
-import { pgTable, uuid, text, timestamp, vector, integer, jsonb, date } from "drizzle-orm/pg-core";
+import { pgTable, uuid, text, timestamp, vector, integer, jsonb, date, index, uniqueIndex } from "drizzle-orm/pg-core";
 
 export const notes = pgTable("notes", {
     id: uuid("id").primaryKey().defaultRandom(),
@@ -57,3 +57,46 @@ export const relationships = pgTable("relationships", {
     weight: integer("weight").default(1), // 1-10 strength
     createdAt: timestamp("created_at").defaultNow().notNull(),
 });
+
+export const agentCheckpoints = pgTable("agent_checkpoints", {
+    id: uuid("id").primaryKey().defaultRandom(),
+    threadId: text("thread_id").notNull(),
+    state: jsonb("state").notNull(),
+    nodeId: text("node_id").notNull(),
+    agentType: text("agent_type").notNull(),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (table) => ({
+    threadCreatedIdx: index("idx_checkpoints_thread").on(table.threadId, table.createdAt),
+}));
+
+export const agentExecutionLogs = pgTable("agent_execution_logs", {
+    id: uuid("id").primaryKey().defaultRandom(),
+    threadId: text("thread_id").notNull(),
+    agentType: text("agent_type").notNull(),
+    status: text("status").notNull(),
+    input: jsonb("input").notNull(),
+    output: jsonb("output"),
+    error: text("error"),
+    durationMs: integer("duration_ms"),
+    retryCount: integer("retry_count").default(0),
+    startedAt: timestamp("started_at").defaultNow().notNull(),
+    completedAt: timestamp("completed_at"),
+}, (table) => ({
+    statusStartedIdx: index("idx_execution_logs_status").on(table.status, table.startedAt),
+    agentStartedIdx: index("idx_execution_logs_agent").on(table.agentType, table.startedAt),
+}));
+
+export const agentMetrics = pgTable("agent_metrics", {
+    id: uuid("id").primaryKey().defaultRandom(),
+    agentType: text("agent_type").notNull(),
+    date: date("date").notNull(),
+    totalExecutions: integer("total_executions").default(0),
+    successfulExecutions: integer("successful_executions").default(0),
+    failedExecutions: integer("failed_executions").default(0),
+    avgDurationMs: integer("avg_duration_ms"),
+    p95DurationMs: integer("p95_duration_ms"),
+    totalRetries: integer("total_retries").default(0),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (table) => ({
+    agentDateIdx: uniqueIndex("idx_metrics_agent_date").on(table.agentType, table.date),
+}));

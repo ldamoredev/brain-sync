@@ -3,6 +3,9 @@ import { Controller } from '../interfaces/Controller';
 import { GenerateDailyAudit } from '../../../application/useCases/GenerateDailyAudit';
 import { GetAgentData } from '../../../application/useCases/GetAgentData';
 import { GenerateRoutine } from '../../../application/useCases/GenerateRoutine';
+import { DailyAuditorGraph } from '../../../application/agents/DailyAuditorGraph';
+import { executeDailyAuditSchema, approveExecutionSchema } from '@brain-sync/types';
+import { validateRequest } from '../middleware/validateRequest';
 
 export class AgentController implements Controller {
     public path = '/agents';
@@ -11,7 +14,8 @@ export class AgentController implements Controller {
     constructor(
         private generateDailyAudit: GenerateDailyAudit,
         private generateRoutineUseCase: GenerateRoutine,
-        private getAgentDataService: GetAgentData
+        private getAgentDataService: GetAgentData,
+        private dailyAuditorGraph: DailyAuditorGraph
     ) {
         this.initializeRoutes();
     }
@@ -22,6 +26,7 @@ export class AgentController implements Controller {
         this.router.post(`${this.path}/routine`, this.generateRoutine.bind(this));
         this.router.get(`${this.path}/routine/:date`, this.getRoutine.bind(this));
         this.router.put(`${this.path}/routine/:date`, this.updateRoutine.bind(this));
+        this.router.post(`${this.path}/daily-audit`, validateRequest(executeDailyAuditSchema), this.executeDailyAudit.bind(this));
     }
 
     async generateAudit(req: Request, res: Response, next: any) {
@@ -76,6 +81,40 @@ export class AgentController implements Controller {
             }
             await this.getAgentDataService.executeUpdateRoutine(req.params.date as any, activities);
             res.json({ message: "Routine updated successfully" });
+        } catch (error) {
+            next(error);
+        }
+    }
+
+    async executeDailyAudit(req: Request, res: Response, next: any) {
+        try {
+            const { date } = req.body;
+            
+            const result = await this.dailyAuditorGraph.execute(
+                { date },
+                { requiresHumanApproval: true }
+            );
+
+            if (result.status === 'paused') {
+                return res.status(202).json({
+                    message: 'Análisis completado, esperando aprobación',
+                    threadId: result.threadId,
+                    analysis: result.state.analysis,
+                    status: 'paused'
+                });
+            } else if (result.status === 'completed') {
+                return res.status(200).json({
+                    message: 'Auditoría diaria completada',
+                    summary: result.state.analysis,
+                    status: 'completed'
+                });
+            } else {
+                return res.status(500).json({
+                    message: 'Error al ejecutar la auditoría',
+                    error: result.error,
+                    status: 'failed'
+                });
+            }
         } catch (error) {
             next(error);
         }

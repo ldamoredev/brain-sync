@@ -25,6 +25,8 @@ import { GenerateRoutine } from '../application/useCases/GenerateRoutine';
 import { ChatPipeline } from '../application/useCases/chat/ChatPipeline';
 import { PromptBuilder } from '../application/useCases/chat/PromptBuilder';
 import { FaithfulnessGuard } from '../application/useCases/chat/FaithfulnessGuard';
+import { DailyAuditorGraph } from '../application/agents/DailyAuditorGraph';
+import { PostgreSQLCheckpointer } from './checkpointer/PostgreSQLCheckpointer';
 
 export class Core {
     public repositories = new DrizzleRepositoryProvider();
@@ -32,10 +34,13 @@ export class Core {
     private llmProvider = new OllamaLLMProvider();
     private vectorProvider = new OllamaVectorProvider();
     private transcriptionProvider = new OpenIATranscriptionProvider();
+    private checkpointer = new PostgreSQLCheckpointer();
+    public dailyAuditorGraph: DailyAuditorGraph;
 
     constructor() {
         this.initializeRepositories();
         this.initializeServices();
+        this.initializeAgents();
     }
 
     private initializeRepositories() {
@@ -73,6 +78,14 @@ export class Core {
         this.useCases.register(TranscriptAudio, () => new TranscriptAudio(this.transcriptionProvider));
         this.useCases.register(GetNotes, () => new GetNotes(this.repositories));
         this.useCases.register(GetAgentData, () => new GetAgentData(this.repositories));
+    }
+
+    private initializeAgents() {
+        this.dailyAuditorGraph = new DailyAuditorGraph(
+            this.llmProvider,
+            this.repositories,
+            this.checkpointer
+        );
     }
 
     public getUseCase<T>(serviceType: SConstructor<T>): T {
