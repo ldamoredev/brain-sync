@@ -92,8 +92,8 @@ export class DailyAuditorGraph implements AgentGraph<DailyAuditorState, { date: 
         startTime: number,
         input: { date: string }
     ): Promise<GraphExecutionResult<DailyAuditorState>> {
-        logger.info('Execution started', { 
-            threadId, 
+        logger.info('Execution started', {
+            threadId,
             agentType: 'daily_auditor',
             date: input.date,
             timestamp: new Date().toISOString()
@@ -105,8 +105,8 @@ export class DailyAuditorGraph implements AgentGraph<DailyAuditorState, { date: 
                 const previousNode = state.currentNode;
                 const nodeStartTime = Date.now();
 
-                logger.info('Node execution started', { 
-                    threadId, 
+                logger.info('Node execution started', {
+                    threadId,
                     node: state.currentNode,
                     timestamp: new Date().toISOString()
                 });
@@ -129,8 +129,8 @@ export class DailyAuditorGraph implements AgentGraph<DailyAuditorState, { date: 
                         // This node is a pause point - execution should stop here
                         // Resume will handle moving to the next node
                         const nodeDuration = Date.now() - nodeStartTime;
-                        logger.info('Node execution completed', { 
-                            threadId, 
+                        logger.info('Node execution completed', {
+                            threadId,
                             node: state.currentNode,
                             durationMs: nodeDuration,
                             timestamp: new Date().toISOString()
@@ -155,8 +155,8 @@ export class DailyAuditorGraph implements AgentGraph<DailyAuditorState, { date: 
                 }
 
                 const nodeDuration = Date.now() - nodeStartTime;
-                logger.info('Node execution completed', { 
-                    threadId, 
+                logger.info('Node execution completed', {
+                    threadId,
                     node: previousNode,
                     nextNode: state.currentNode,
                     durationMs: nodeDuration,
@@ -189,8 +189,8 @@ export class DailyAuditorGraph implements AgentGraph<DailyAuditorState, { date: 
             };
 
             const totalDuration = Date.now() - startTime;
-            logger.info('Execution completed', { 
-                threadId, 
+            logger.info('Execution completed', {
+                threadId,
                 agentType: 'daily_auditor',
                 status: state.status,
                 totalDurationMs: totalDuration,
@@ -209,8 +209,8 @@ export class DailyAuditorGraph implements AgentGraph<DailyAuditorState, { date: 
             state.status = 'failed';
             state.error = error instanceof Error ? error.message : 'Unknown error';
             await this.checkpointer.save(threadId, state, state.currentNode, 'daily_auditor');
-            logger.error('Execution failed', { 
-                threadId, 
+            logger.error('Execution failed', {
+                threadId,
                 agentType: 'daily_auditor',
                 error: state.error,
                 totalDurationMs: totalDuration,
@@ -236,7 +236,7 @@ export class DailyAuditorGraph implements AgentGraph<DailyAuditorState, { date: 
         input?: { approved?: boolean }
     ): Promise<GraphExecutionResult<DailyAuditorState>> {
         const checkpoint = await this.checkpointer.load<DailyAuditorState>(threadId);
-        
+
         if (!checkpoint) {
             throw new AppError('Thread de ejecución no encontrado', 404);
         }
@@ -254,23 +254,27 @@ export class DailyAuditorGraph implements AgentGraph<DailyAuditorState, { date: 
         // Update approval status and move to next node
         state.approved = input?.approved ?? false;
         state.status = 'running';
-        
+        state.updatedAt = new Date();
+
+
         // If approved, continue to saveSummary, otherwise go to end
         if (state.approved) {
             state.currentNode = 'saveSummary';
         } else {
             state.currentNode = 'end';
+            state.status = 'completed'; // If not approved, mark as completed immediately
         }
 
         logger.info('Resuming execution', { threadId, approved: state.approved });
 
+        await this.checkpointer.save(threadId, state, state.currentNode, 'daily_auditor');
         // Continue execution
         return this.execute({ date: state.date }, { threadId, maxRetries: 3, requiresHumanApproval: true });
     }
 
     async getStatus(threadId: string): Promise<{ status: string; state: DailyAuditorState }> {
         const checkpoint = await this.checkpointer.load<DailyAuditorState>(threadId);
-        
+
         if (!checkpoint) {
             throw new AppError('Thread de ejecución no encontrado', 404);
         }
@@ -283,14 +287,14 @@ export class DailyAuditorGraph implements AgentGraph<DailyAuditorState, { date: 
 
     async cancel(threadId: string): Promise<void> {
         const checkpoint = await this.checkpointer.load<DailyAuditorState>(threadId);
-        
+
         if (!checkpoint) {
             throw new AppError('Thread de ejecución no encontrado', 404);
         }
 
         checkpoint.state.status = 'failed';
         checkpoint.state.error = 'Execution cancelled by user';
-        
+
         await this.checkpointer.save(threadId, checkpoint.state, checkpoint.state.currentNode, 'daily_auditor');
         logger.info('Execution cancelled', { threadId });
     }
@@ -337,7 +341,7 @@ export class DailyAuditorGraph implements AgentGraph<DailyAuditorState, { date: 
                 date: state.date,
                 error: errorMessage
             });
-            
+
             throw new AppError(
                 'Database temporarily unavailable - failed to fetch notes',
                 500
@@ -351,19 +355,30 @@ export class DailyAuditorGraph implements AgentGraph<DailyAuditorState, { date: 
         // Sanitize note content before sending to LLM
         const sanitizedNotes = state.notes.map(n => sanitizeInput(n.content));
         const context = sanitizedNotes.join('\n\n');
-        
+
         const prompt = `
-        Actúa como un "Auditor Diario" para la recuperación y salud emocional.
-        Analiza las notas del día:
-        ${context}
+Actúa como un "Auditor Diario" para la recuperación y salud emocional.
+Analiza las notas del día:
+${context}
 
-        Genera un resumen JSON con:
-        1. "summary": Resumen narrativo del día.
-        2. "riskLevel": Nivel de riesgo de recaída (1-10).
-        3. "keyInsights": Lista de puntos clave observados.
+Devuelve ÚNICAMENTE un objeto JSON válido con esta estructura exacta:
+{
+  "summary": "Resumen narrativo del día en una o dos oraciones",
+  "riskLevel": 5,
+  "keyInsights": [
+    "Primer punto clave observado",
+    "Segundo punto clave observado",
+    "Tercer punto clave observado"
+  ]
+}
 
-        Formato JSON estricto.
-        `;
+IMPORTANTE:
+- NO agregues texto adicional fuera del JSON
+- NO agregues comentarios dentro del JSON
+- riskLevel debe ser un número entre 1 y 10
+- keyInsights debe ser un array de strings
+- Devuelve SOLO el objeto JSON, nada más
+`;
 
         const messages: ChatMessage[] = [
             { role: 'system', content: 'Eres un auditor de salud mental. Devuelve solo JSON.' },
@@ -375,8 +390,8 @@ export class DailyAuditorGraph implements AgentGraph<DailyAuditorState, { date: 
             const analysis = JsonParser.parseSafe(response, null);
 
             if (!analysis) {
-                logger.warn('JSON parsing failed', { 
-                    threadId: state.threadId, 
+                logger.warn('JSON parsing failed', {
+                    threadId: state.threadId,
                     rawResponse: response,
                     retryCount: state.retryCount
                 });
@@ -398,10 +413,10 @@ export class DailyAuditorGraph implements AgentGraph<DailyAuditorState, { date: 
             };
         } catch (error) {
             const newRetryCount = state.retryCount + 1;
-            
+
             if (newRetryCount >= maxRetries) {
                 const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-                logger.error('Ejecución fallida después de alcanzar el máximo de reintentos', { 
+                logger.error('Ejecución fallida después de alcanzar el máximo de reintentos', {
                     threadId: state.threadId,
                     maxRetries,
                     error: errorMessage
@@ -409,7 +424,7 @@ export class DailyAuditorGraph implements AgentGraph<DailyAuditorState, { date: 
                 return {
                     ...state,
                     status: 'failed',
-                    error: `Failed to analyze notes after ${maxRetries} retries: ${errorMessage}`,
+                    error: `Failed to analyze notes after ${maxRetries} retries: ${errorMessage} `,
                     retryCount: newRetryCount,
                     updatedAt: new Date()
                 };
@@ -419,9 +434,9 @@ export class DailyAuditorGraph implements AgentGraph<DailyAuditorState, { date: 
             const baseBackoffMs = Math.pow(2, newRetryCount) * 1000;
             const jitterMs = Math.random() * 1000;
             const backoffMs = Math.min(10000, baseBackoffMs + jitterMs);
-            
-            logger.warn('Análisis falló, reintentando con backoff exponencial', { 
-                threadId: state.threadId, 
+
+            logger.warn('Análisis falló, reintentando con backoff exponencial', {
+                threadId: state.threadId,
                 retryCount: newRetryCount,
                 backoffMs: Math.round(backoffMs),
                 error: error instanceof Error ? error.message : 'Unknown error'
@@ -441,10 +456,10 @@ export class DailyAuditorGraph implements AgentGraph<DailyAuditorState, { date: 
         state: DailyAuditorState,
         requiresHumanApproval: boolean
     ): Promise<DailyAuditorState> {
-        logger.info('Executing checkApproval node', { 
-            threadId: state.threadId, 
+        logger.info('Executing checkApproval node', {
+            threadId: state.threadId,
             riskLevel: state.analysis?.riskLevel,
-            requiresHumanApproval 
+            requiresHumanApproval
         });
 
         if (requiresHumanApproval && state.analysis && state.analysis.riskLevel >= 7) {
@@ -501,11 +516,11 @@ export class DailyAuditorGraph implements AgentGraph<DailyAuditorState, { date: 
             };
         } catch (error) {
             const errorMessage = error instanceof Error ? error.message : 'Unknown database error';
-            logger.error('Database error while saving summary', { 
-                threadId: state.threadId, 
+            logger.error('Database error while saving summary', {
+                threadId: state.threadId,
                 error: errorMessage
             });
-            
+
             throw new AppError(
                 'Database temporarily unavailable - failed to save summary',
                 500

@@ -259,14 +259,19 @@ export class RoutineGeneratorGraph implements AgentGraph<RoutineGeneratorState, 
 
         state.approved = input?.approved ?? false;
         state.status = 'running';
+        state.updatedAt = new Date();
+
         
         if (state.approved) {
             state.currentNode = 'saveRoutine';
         } else {
             state.currentNode = 'end';
+            state.status = 'completed'; // If not approved, mark as completed immediately
         }
 
         logger.info('Resuming execution', { threadId, approved: state.approved });
+        await this.checkpointer.save(threadId, state, state.currentNode, 'routine_generator');
+
 
         return this.execute({ date: state.date }, { threadId, maxRetries: 3, requiresHumanApproval: true });
     }

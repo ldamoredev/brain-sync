@@ -117,6 +117,37 @@ export default function TestAgentsPage() {
         }
     };
 
+    const handleCheckData = async (endpoint: string, dataType: string) => {
+        setLoading(true);
+        setError('');
+        setResponse(null);
+        setStatus(`Verificando ${dataType}...`);
+
+        try {
+            const res = await fetch(`${API_BASE}${endpoint}/${date}`);
+
+            if (res.status === 404) {
+                setStatus(`ℹ️ No hay ${dataType.toLowerCase()} para esta fecha`);
+                setResponse({ message: `No se encontró ${dataType.toLowerCase()} para ${date}` });
+                return;
+            }
+
+            const data = await res.json();
+
+            if (!res.ok) {
+                throw new Error(data.message || `Error al verificar ${dataType.toLowerCase()}`);
+            }
+
+            setResponse(data);
+            setStatus(`✅ ${dataType} encontrada`);
+        } catch (err: any) {
+            setError(err.message || 'Error desconocido');
+            setStatus('❌ Error');
+        } finally {
+            setLoading(false);
+        }
+    };
+
     return (
         <div className="min-h-screen bg-zinc-950 text-white p-8">
             <div className="max-w-4xl mx-auto space-y-8">
@@ -153,6 +184,28 @@ export default function TestAgentsPage() {
                         >
                             <span>📅</span>
                             <span>Generar Rutina</span>
+                        </button>
+                    </div>
+                </div>
+
+                <div className="bg-zinc-900 p-6 rounded-lg border border-zinc-800">
+                    <h2 className="text-xl font-semibold mb-4">Verificar Datos Existentes</h2>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <button
+                            onClick={() => handleCheckData('/agents/audit', 'Auditoría')}
+                            disabled={loading}
+                            className="px-6 py-4 bg-zinc-700 hover:bg-zinc-600 disabled:bg-zinc-800 disabled:cursor-not-allowed rounded-lg font-medium transition-colors flex items-center justify-center gap-2"
+                        >
+                            <span>🔍</span>
+                            <span>Verificar Auditoría</span>
+                        </button>
+                        <button
+                            onClick={() => handleCheckData('/agents/routine', 'Rutina')}
+                            disabled={loading}
+                            className="px-6 py-4 bg-zinc-700 hover:bg-zinc-600 disabled:bg-zinc-800 disabled:cursor-not-allowed rounded-lg font-medium transition-colors flex items-center justify-center gap-2"
+                        >
+                            <span>🔍</span>
+                            <span>Verificar Rutina</span>
                         </button>
                     </div>
                 </div>

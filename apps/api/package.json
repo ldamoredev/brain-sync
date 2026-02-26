@@ -11,7 +11,8 @@
     "db:reset": "ts-node-dev --transpile-only scripts/reset-db.ts",
     "test": "vitest run",
     "test:watch": "vitest",
-    "benchmark": "ts-node-dev --transpile-only scripts/benchmark.ts"
+    "seed": "ts-node-dev --transpile-only scripts/seed-demo-data.ts",
+    "seed:demo": "ts-node-dev --transpile-only scripts/seed-demo-data.ts"
   },
   "keywords": [],
   "author": "",

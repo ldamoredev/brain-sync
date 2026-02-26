@@ -7,34 +7,36 @@ import { AppError } from '../../domain/errors/AppError';
 import logger from '../logger';
 
 export class PostgreSQLCheckpointer implements CheckpointerProvider {
-    async save<T>(threadId: string, state: T, nodeId: string, agentType: string = 'unknown'): Promise<string> {
-        const checkpointId = randomUUID();
-        
-        try {
-            await db.insert(agentCheckpoints).values({
-                id: checkpointId,
-                threadId,
-                state: state as any,
-                nodeId,
-                agentType,
-            });
+async save<T>(threadId: string, state: T, nodeId: string, agentType: string = 'unknown'): Promise<string> {
+    const checkpointId = randomUUID();
+    
+    try {
+        await db.insert(agentCheckpoints).values({
+            id: checkpointId,
+            threadId,
+            userId: null, // Explicitly set to null for MVP (will be set when auth is implemented)
+            state: state as any,
+            nodeId,
+            agentType,
+        });
 
-            return checkpointId;
-        } catch (error) {
-            const errorMessage = error instanceof Error ? error.message : 'Unknown database error';
-            logger.error('Database error while saving checkpoint', {
-                threadId,
-                nodeId,
-                agentType,
-                error: errorMessage
-            });
-            
-            throw new AppError(
-                'Database temporarily unavailable - failed to save checkpoint',
-                500
-            );
-        }
+        return checkpointId;
+    } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : 'Unknown database error';
+        logger.error('Database error while saving checkpoint', {
+            threadId,
+            nodeId,
+            agentType,
+            error: errorMessage
+        });
+        
+        throw new AppError(
+            'Database temporarily unavailable - failed to save checkpoint',
+            500
+        );
     }
+}
+
 
     async load<T>(threadId: string, checkpointId?: string): Promise<Checkpoint<T> | null> {
         try {

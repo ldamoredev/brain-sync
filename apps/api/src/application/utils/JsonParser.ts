@@ -19,8 +19,10 @@ export class JsonParser {
             clean = clean.substring(firstBrace);
         }
 
-        // Remove trailing commas before ] or }
-        clean = clean.replace(/,\s*([\]}])/g, '$1');
+// AGGRESSIVE CLEANING: Remove common LLM commentary patterns before closing brackets
+// This handles cases like: "text", end of insights]
+clean = clean.replace(/,\s+end of [^\]]*\]/gi, ']');
+clean = clean.replace(/,\s+[a-z\s]+\]/gi, ']');
 
         return clean;
     }
