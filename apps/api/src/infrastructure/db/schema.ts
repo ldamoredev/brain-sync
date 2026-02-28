@@ -1,4 +1,20 @@
-import { pgTable, uuid, text, timestamp, vector, integer, jsonb, date, index, uniqueIndex } from "drizzle-orm/pg-core";
+import { SQL, sql } from 'drizzle-orm';
+import { pgTable, uuid, text, timestamp, vector, integer, jsonb, date, index, uniqueIndex, customType, real } from "drizzle-orm/pg-core";
+
+// Custom type for PostgreSQL tsvector (full-text search)
+const tsvector = customType<{ data: string }>({
+    dataType() {
+        return 'tsvector';
+    },
+});
+
+// Custom type for PostgreSQL text array
+const textArray = customType<{ data: string[] }>({
+    dataType() {
+        return 'text[]';
+    },
+});
+
 
 export const notes = pgTable("notes", {
     id: uuid("id").primaryKey().defaultRandom(),
@@ -66,9 +82,9 @@ export const agentCheckpoints = pgTable("agent_checkpoints", {
     nodeId: text("node_id").notNull(),
     agentType: text("agent_type").notNull(),
     createdAt: timestamp("created_at").defaultNow().notNull(),
-}, (table) => ({
-    threadCreatedIdx: index("idx_checkpoints_thread").on(table.threadId, table.createdAt),
-}));
+}, (table) => ([
+    index("idx_checkpoints_thread").on(table.threadId, table.createdAt),
+]));
 
 export const agentExecutionLogs = pgTable("agent_execution_logs", {
     id: uuid("id").primaryKey().defaultRandom(),
@@ -82,10 +98,10 @@ export const agentExecutionLogs = pgTable("agent_execution_logs", {
     retryCount: integer("retry_count").default(0),
     startedAt: timestamp("started_at").defaultNow().notNull(),
     completedAt: timestamp("completed_at"),
-}, (table) => ({
-    statusStartedIdx: index("idx_execution_logs_status").on(table.status, table.startedAt),
-    agentStartedIdx: index("idx_execution_logs_agent").on(table.agentType, table.startedAt),
-}));
+}, (table) => ([
+    index("idx_execution_logs_status").on(table.status, table.startedAt),
+    index("idx_execution_logs_agent").on(table.agentType, table.startedAt),
+]));
 
 export const agentMetrics = pgTable("agent_metrics", {
     id: uuid("id").primaryKey().defaultRandom(),
@@ -98,6 +114,56 @@ export const agentMetrics = pgTable("agent_metrics", {
     p95DurationMs: integer("p95_duration_ms"),
     totalRetries: integer("total_retries").default(0),
     createdAt: timestamp("created_at").defaultNow().notNull(),
-}, (table) => ({
-    agentDateIdx: uniqueIndex("idx_metrics_agent_date").on(table.agentType, table.date),
-}));
+}, (table) => ([
+    uniqueIndex("idx_metrics_agent_date").on(table.agentType, table.date),
+]));
+
+export const chunks = pgTable("chunks", {
+    id: uuid("id").primaryKey().defaultRandom(),
+    noteId: uuid("note_id").notNull().references(() => notes.id, { onDelete: 'cascade' }),
+    content: text("content").notNull(),
+    chunkIndex: integer("chunk_index").notNull(),
+    startChar: integer("start_char").notNull(),
+    endChar: integer("end_char").notNull(),
+    embedding: vector("embedding", { dimensions: 768 }),
+    contextualEmbedding: vector("contextual_embedding", { dimensions: 768 }),
+    tsvector: tsvector("tsvector").notNull().generatedAlwaysAs((): SQL => sql`to_tsvector('spanish', ${chunks.content})`),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (table) => ([
+    index("idx_chunks_note_id").on(table.noteId),
+    index("idx_chunks_tsvector").using('gin', table.tsvector),
+    index("idx_chunks_embedding").using('hnsw', table.embedding.op('vector_cosine_ops')),
+    index("idx_chunks_contextual_embedding").using('hnsw', table.contextualEmbedding.op('vector_cosine_ops')),
+]));
+
+export const goldenDataset = pgTable("golden_dataset", {
+    id: uuid("id").primaryKey().defaultRandom(),
+    query: text("query").notNull().unique(),
+    relevantNoteIds: textArray("relevant_note_ids").notNull(),
+    expectedAnswer: text("expected_answer").notNull(),
+    category: text("category").notNull(), // 'factual' | 'causal' | 'temporal' | 'comparative' | 'multi-part'
+    difficulty: integer("difficulty").notNull(), // 1-5
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at").defaultNow().notNull(),
+}, (table) => ([
+    index("idx_golden_dataset_category").on(table.category),
+]));
+
+export const evaluationResults = pgTable("evaluation_results", {
+    id: uuid("id").primaryKey().defaultRandom(),
+    configHash: text("config_hash").notNull(),
+    hitRateK1: real("hit_rate_k1").notNull(),
+    hitRateK3: real("hit_rate_k3").notNull(),
+    hitRateK5: real("hit_rate_k5").notNull(),
+    hitRateK10: real("hit_rate_k10").notNull(),
+    mrr: real("mrr").notNull(),
+    faithfulness: real("faithfulness").notNull(),
+    answerRelevance: real("answer_relevance").notNull(),
+    latencyP50: integer("latency_p50").notNull(),
+    latencyP95: integer("latency_p95").notNull(),
+    latencyP99: integer("latency_p99").notNull(),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (table) => ([
+    index("idx_evaluation_results_config_hash").on(table.configHash),
+    index("idx_evaluation_results_created_at").on(table.createdAt),
+]));
