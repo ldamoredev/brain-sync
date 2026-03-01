@@ -151,13 +151,14 @@ This plan enhances Brain Sync's RAG system from ~60% to 85%+ retrieval accuracy 
 
 
 - [ ] 5. Implement HybridSearchService with RRF algorithm
-  - [ ] 5.1 Create HybridSearchService class and configuration
+  
+  - [x] 5.1 Create HybridSearchService class and configuration
     - Create `apps/api/src/application/services/HybridSearchService.ts`
     - Define HybridSearchConfig interface with threshold, rrfK, semanticWeight, fulltextWeight
     - Inject ChunkRepository and VectorProvider dependencies
     - _Requirements: Requirement 1, Design Section "HybridSearchService"_
   
-  - [ ] 5.2 Implement RRF fusion algorithm
+  - [x] 5.2 Implement RRF fusion algorithm
     - Create fuseWithRRF() private method
     - Accept semanticResults and ftResults arrays with ranks
     - Compute RRF score: sum(1 / (k + rank_i)) for each document
@@ -166,7 +167,7 @@ This plan enhances Brain Sync's RAG system from ~60% to 85%+ retrieval accuracy 
     - Return top-k results
     - _Requirements: Requirement 1.4, Design Section "HybridSearchService.fuseWithRRF()"_
   
-  - [ ] 5.3 Implement search() main method
+  - [x] 5.3 Implement search() main method
     - Generate embedding for query using VectorProvider
     - Execute semanticSearch() and fullTextSearch() in parallel using Promise.all
     - Call fuseWithRRF() to combine results
@@ -174,13 +175,13 @@ This plan enhances Brain Sync's RAG system from ~60% to 85%+ retrieval accuracy 
     - Return RetrievalResult entities with metadata
     - _Requirements: Requirement 1.1, Requirement 1.2, Requirement 1.5, Requirement 1.8, Requirement 1.9_
   
-  - [ ] 5.4 Implement performance optimization
+  - [x] 5.4 Implement performance optimization
     - Ensure parallel execution completes within 500ms for top-10 results
     - Add timeout handling for slow queries
     - Log search latency for monitoring
     - _Requirements: Requirement 1.6, Requirement 14.1_
   
-  - [ ]* 5.5 Write unit tests for HybridSearchService
+  - [x] 5.5 Write unit tests for HybridSearchService
     - Test fuseWithRRF() combines results correctly
     - Test fuseWithRRF() handles empty semantic results
     - Test fuseWithRRF() handles empty full-text results
@@ -189,20 +190,20 @@ This plan enhances Brain Sync's RAG system from ~60% to 85%+ retrieval accuracy 
     - Test search() preserves metadata in results
     - _Requirements: Requirement 17.2_
   
-  - [ ]* 5.6 Write property test for RRF score monotonicity
+  - [x] 5.6 Write property test for RRF score monotonicity
     - **Property 1: RRF Score Monotonicity**
     - **Validates: Requirements 1.5, Property 1**
     - Verify if document A ranks higher than B, then A's score >= B's score
 
 - [ ] 6. Implement QueryTransformationService with intent detection
-  - [ ] 6.1 Create QueryTransformationService class
+  - [x] 6.1 Create QueryTransformationService class
     - Create `apps/api/src/application/services/QueryTransformationService.ts`
     - Define TransformedQuery interface with originalQuery, intent, subQueries, hydeAnswer, timestamp
     - Define QueryIntent type: 'factual' | 'causal' | 'temporal' | 'comparative' | 'abstract'
     - Inject LLMProvider dependency
     - _Requirements: Requirement 4, Design Section "QueryTransformationService"_
 
-  - [ ] 6.2 Implement detectIntent() method
+  - [x] 6.2 Implement detectIntent() method
     - Build LLM prompt asking to classify query intent
     - Support Spanish language queries
     - Parse LLM response to extract intent category
@@ -210,28 +211,28 @@ This plan enhances Brain Sync's RAG system from ~60% to 85%+ retrieval accuracy 
     - Complete within 300ms timeout
     - _Requirements: Requirement 4.1, Requirement 4.3, Requirement 4.8, Requirement 4.9_
   
-  - [ ] 6.3 Implement decomposeQuery() method
+  - [x] 6.3 Implement decomposeQuery() method
     - Detect if query contains multiple questions
     - Use LLM to split complex queries into sub-queries
     - Return array of sub-queries (empty if query is simple)
     - Preserve original query structure
     - _Requirements: Requirement 4.2, Requirement 4.7_
   
-  - [ ] 6.4 Implement generateHyDE() method
+  - [x] 6.4 Implement generateHyDE() method
     - Build LLM prompt asking for hypothetical answer
     - Generate answer for abstract or complex queries
     - Return hypothetical answer text
     - Skip HyDE for simple factual queries
     - _Requirements: Requirement 4.5, Requirement 4.6_
   
-  - [ ] 6.5 Implement transform() main method
+  - [x] 6.5 Implement transform() main method
     - Call detectIntent(), decomposeQuery(), and generateHyDE() as needed
     - Return TransformedQuery with all fields populated
     - Ensure originalQuery is always preserved
     - Complete within 300ms total
     - _Requirements: Requirement 4.10, Property 8_
   
-  - [ ]* 6.6 Write unit tests for QueryTransformationService
+  - [x] 6.6 Write unit tests for QueryTransformationService
     - Test detectIntent() identifies causal queries
     - Test detectIntent() handles Spanish queries
     - Test decomposeQuery() splits multi-part questions
@@ -240,26 +241,26 @@ This plan enhances Brain Sync's RAG system from ~60% to 85%+ retrieval accuracy 
     - Test transform() completes within timeout
     - _Requirements: Requirement 17.2_
   
-  - [ ]* 6.7 Write property test for query transformation preservation
+  - [x] 6.7 Write property test for query transformation preservation
     - **Property 8: Query Transformation Preservation**
     - **Validates: Requirements 4.7, Property 8**
     - Verify original query is always preserved in transformation result
 
 - [ ] 7. Implement ReRankingService with LLM-based scoring
-  - [ ] 7.1 Create ReRankingService class and configuration
+  - [x] 7.1 Create ReRankingService class and configuration
     - Create `apps/api/src/application/services/ReRankingService.ts`
     - Define ReRankingConfig interface with enabled, batchSize, timeout
     - Inject LLMProvider dependency
     - _Requirements: Requirement 3, Design Section "ReRankingService"_
 
-  - [ ] 7.2 Extend LLMProvider interface with scoring methods
+  - [x] 7.2 Extend LLMProvider interface with scoring methods
     - Update `apps/api/src/application/providers/LLMProvider.ts`
     - Add scoreRelevance(query: string, document: string): Promise<number>
     - Add evaluateFaithfulness(context: string, answer: string): Promise<number>
     - Add evaluateAnswerRelevance(query: string, answer: string, expectedAnswer: string): Promise<number>
     - _Requirements: Design Section "Extended LLMProvider Interface"_
   
-  - [ ] 7.3 Implement scoring methods in OllamaLLMProvider
+  - [x] 7.3 Implement scoring methods in OllamaLLMProvider
     - Update `apps/api/src/infrastructure/providers/OllamaLLMProvider.ts`
     - Implement scoreRelevance() with LLM prompt requesting 0-1 score
     - Implement evaluateFaithfulness() checking if answer is grounded in context
@@ -268,14 +269,14 @@ This plan enhances Brain Sync's RAG system from ~60% to 85%+ retrieval accuracy 
     - Return normalized scores in [0, 1] range
     - _Requirements: Requirement 3.2, Requirement 3.9, Property 7_
   
-  - [ ] 7.4 Implement batch scoring with efficiency
+  - [x] 7.4 Implement batch scoring with efficiency
     - Create batchScore() private method
     - Split results into batches of configurable size (default 5)
     - Process batches in parallel using Promise.all
     - Implement timeout per batch (default 1000ms)
     - _Requirements: Requirement 3.6, Requirement 3.7_
   
-  - [ ] 7.5 Implement rerank() main method
+  - [x] 7.5 Implement rerank() main method
     - Check if re-ranking is enabled in config
     - If disabled, return original results sliced to topK
     - If enabled, call batchScore() for all results
@@ -284,7 +285,7 @@ This plan enhances Brain Sync's RAG system from ~60% to 85%+ retrieval accuracy 
     - Return top-k reranked results
     - _Requirements: Requirement 3.1, Requirement 3.3, Requirement 3.8, Requirement 3.10_
   
-  - [ ]* 7.6 Write unit tests for ReRankingService
+  - [x] 7.6 Write unit tests for ReRankingService
     - Test rerank() returns original order when disabled
     - Test rerank() reorders by relevance score
     - Test batchScore() processes in batches
@@ -293,7 +294,7 @@ This plan enhances Brain Sync's RAG system from ~60% to 85%+ retrieval accuracy 
     - Test rerank() handles LLM scoring failures gracefully
     - _Requirements: Requirement 17.2_
 
-- [ ] 8. Checkpoint - Verify advanced retrieval services
+- [x] 8. Checkpoint - Verify advanced retrieval services
   - Ensure all tests pass, ask the user if questions arise.
 
 
